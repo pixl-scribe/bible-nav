@@ -1,15 +1,34 @@
 <script lang="ts">
-    import { resolve } from "$app/paths";
-    const homePath = resolve('/');
+  import { resolve } from "$app/paths";
+  import { Store } from '@tauri-apps/plugin-store'
+  import {onMount} from "svelte";
 
-    let currentTheme = '';
+  const homePath = resolve('/');
 
-    function setTheme(event: Event) {
-        const select = event.target as HTMLSelectElement;
-        const theme = select.value;
-        document.documentElement.setAttribute('data-theme', theme);
-        currentTheme = theme;
+  let currentTheme = '';
+  let store: Store | undefined = undefined;
+  let settings: { theme: string } | undefined = undefined;
+
+  async function setTheme(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const theme = select.value;
+    document.documentElement.setAttribute('data-theme', theme);
+    currentTheme = theme;
+    if (!settings) {
+      settings = { theme: theme }; // init settings
+    } else {
+      settings.theme = theme;
     }
+    await store?.set('settings', settings);
+  }
+
+  onMount(async () => {
+    store = await Store.load('settings.json')
+    settings = await store.get<{ theme: string }>('settings');
+    if (settings?.theme) {
+      currentTheme = settings.theme;
+    }
+  })
 </script>
 
 <main class="container">

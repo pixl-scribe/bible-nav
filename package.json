@@ -16,6 +16,7 @@
     "@tailwindcss/vite": "^4.3.1",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-store": "^2.4.3",
     "daisyui": "^5.5.23",
     "tailwindcss": "^4.3.1"
   },

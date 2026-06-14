@@ -3,7 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { resolve } from "$app/paths";
 
-  const configPath = resolve('/config');
+  const settingsPath = resolve('/settings');
 
   let name = $state("");
   let greetMsg = $state("");
@@ -19,8 +19,8 @@
   <h1>Welcome to Bible Nav</h1>
 
   <div class="row">
-    <a href={configPath}>
-      Configuration
+    <a href={settingsPath}>
+      Application Settings
     </a>
   </div>
 
