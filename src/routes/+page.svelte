@@ -2,6 +2,8 @@
   import "../app.css";
   import { invoke } from "@tauri-apps/api/core";
   import { resolve } from "$app/paths";
+  import { onMount } from "svelte";
+  import { themeService } from "$lib/services/theme-service.svelte";
 
   const settingsPath = resolve('/settings');
 
@@ -13,6 +15,11 @@
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
     greetMsg = await invoke("greet", { name });
   }
+
+  onMount(async () => {
+    await themeService.loadTheme();
+  });
+
 </script>
 
 <main class="container">
