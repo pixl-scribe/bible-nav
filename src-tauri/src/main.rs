@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    bible_nav_lib::run()
+  bible_nav_lib::run()
 }
