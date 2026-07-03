@@ -1,12 +1,12 @@
-import {Store} from "@tauri-apps/plugin-store";
+import { Store } from '@tauri-apps/plugin-store';
 
 interface AppSettings {
   theme: string;
 }
 
 const defaultSettings: AppSettings = {
-  theme: "default",
-}
+  theme: 'default',
+};
 
 class AppSettingsService {
   private _settings = $state<AppSettings | undefined>(undefined);
@@ -33,7 +33,7 @@ class AppSettingsService {
 
   private async fetchSettings(): Promise<AppSettings> {
     this._isLoading = true;
-    this._store = await Store.load('settings.json')
+    this._store = await Store.load('settings.json');
     let settings = await this._store.get<AppSettings>('settings');
     if (!settings) {
       await this._store.set('settings', defaultSettings);

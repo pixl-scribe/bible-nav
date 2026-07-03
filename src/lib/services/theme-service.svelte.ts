@@ -1,4 +1,4 @@
-import { appSettingsService } from "./app-settings-service.svelte";
+import { appSettingsService } from './app-settings-service.svelte';
 
 class ThemeService {
   public async loadTheme(): Promise<void> {
