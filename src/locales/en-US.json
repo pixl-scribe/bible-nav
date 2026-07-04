@@ -1,6 +1,8 @@
 {
   "common.app-name": "Bible Nav",
   "common.return-home": "Return To Home",
+  "main.new-search": "New Search",
+  "main.add-parallel": "Add Parallel Text",
   "home.app-settings": "Application Settings",
   "settings.heading": "Application Settings",
   "settings.theme": "Theme",
