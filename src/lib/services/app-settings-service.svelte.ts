@@ -1,11 +1,13 @@
 import { Store } from '@tauri-apps/plugin-store';
 
-interface AppSettings {
+export interface AppSettings {
   theme: string;
+  locale: string;
 }
 
 const defaultSettings: AppSettings = {
   theme: 'default',
+  locale: 'en-US',
 };
 
 class AppSettingsService {

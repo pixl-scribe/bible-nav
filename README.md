@@ -1,15 +1,18 @@
-# Tauri + SvelteKit + TypeScript
+# Bible Nav
 
-This template should help get you started developing with Tauri, SvelteKit and TypeScript in Vite.
-
-## Recommended IDE Setup
-
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
-
+Bible Nav is a cross-platform Bible desktop application built to be
+- :compass: easy to use and navigate
+- :rocket: modern
+- :racing_car: high performant
+- :footprints: with a small footprint
 
 ## Dev Steps
 
-`npm run tauri dev`
+```
+npm run tauri dev    # runs app in dev mode
+npm run lint         # lints the typescript
+npm run pseudolocale # regenerate the locales/en-XA.json pseudo locale file for i18n testing
+```
 
 ## Build Steps
 

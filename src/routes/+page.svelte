@@ -5,6 +5,7 @@
   import { onMount } from "svelte";
   import { themeService } from "$lib/services/theme-service.svelte";
   import Database from '@tauri-apps/plugin-sql';
+  import { _ } from 'svelte-i18n';
 
   const settingsPath = resolve('/settings');
 
@@ -33,18 +34,12 @@
 
 </script>
 
-<main class="container">
-  <h1>Welcome to Bible Nav</h1>
-
-  <div class="row">
-    <a href={settingsPath}>
-      Application Settings
-    </a>
-  </div>
-
-  <div>
-    <button class="btn btn-primary" onclick={connect}>Connect to DB</button>
-  </div>
+<main class="flex flex-col">
+  <h1>{$_('common.app-name')}</h1>
+  <a href={settingsPath}>
+    {$_('home.app-settings')}
+  </a>
+  <button class="btn btn-primary" onclick={connect}>Connect to DB</button>
   <form class="row" onsubmit={greet}>
     <input id="greet-input" placeholder="Enter a name..." bind:value={name} />
     <button class="btn btn-primary" type="submit">Greet</button>
