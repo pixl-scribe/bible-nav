@@ -15,6 +15,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@lucide/svelte": "^1.23.0",
     "@tailwindcss/vite": "^4.3.1",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
@@ -33,10 +34,13 @@
     "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.6",
+    "eslint-plugin-svelte": "^3.20.0",
     "prettier": "^3.9.4",
+    "prettier-plugin-svelte": "^4.1.1",
     "pseudolocale": "^2.2.0",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
+    "svelte-eslint-parser": "^1.8.0",
     "typescript": "~5.6.2",
     "typescript-eslint": "^8.62.1",
     "vite": "^6.0.3"

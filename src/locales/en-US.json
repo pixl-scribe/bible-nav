@@ -4,5 +4,7 @@
   "home.app-settings": "Application Settings",
   "settings.heading": "Application Settings",
   "settings.theme": "Theme",
-  "settings.language": "Language"
+  "settings.language": "Language",
+  "left-nav.modules": "Modules",
+  "left-nav.settings": "Settings"
 }

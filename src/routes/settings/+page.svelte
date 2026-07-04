@@ -1,22 +1,29 @@
 <script lang="ts">
-  import { resolve } from "$app/paths";
-  import { themeService } from "$lib/services/theme-service.svelte";
-  import I18nService from "$lib/services/i18n-service";
+  import { resolve } from '$app/paths';
+  import { themeService } from '$lib/services/theme-service.svelte';
+  import I18nService from '$lib/services/i18n-service';
   import { _ } from 'svelte-i18n';
-  import {onMount} from "svelte";
-  import {type AppSettings, appSettingsService} from "$lib/services/app-settings-service.svelte";
+  import { onMount } from 'svelte';
+  import {
+    type AppSettings,
+    appSettingsService,
+  } from '$lib/services/app-settings-service.svelte.js';
 
   const homePath = resolve('/');
 
   let appSettings: AppSettings | undefined;
 
+  // eslint-disable-next-line no-undef
   async function setTheme(event: Event) {
+    // eslint-disable-next-line no-undef
     const select = event.target as HTMLSelectElement;
     const theme = select.value;
     await themeService.setTheme(theme);
   }
 
+  // eslint-disable-next-line no-undef
   async function setLocale(event: Event) {
+    // eslint-disable-next-line no-undef
     const select = event.target as HTMLSelectElement;
     const locale = select.value;
     await I18nService.setLocale(locale);
@@ -32,145 +39,166 @@
   <a href={homePath}>
     {$_('common.return-home')}
   </a>
-  <div>Current Theme: { appSettings?.theme }</div>
+  <div>Current Theme: {appSettings?.theme}</div>
   <div class="dropdown mb-2">
     <div tabindex="0" role="button" class="btn m-1">
       {$_('settings.theme')}
       <svg
-          width="12px"
-          height="12px"
-          class="inline-block h-2 w-2 fill-current opacity-60"
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 2048 2048">
-        <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path>
+        width="12px"
+        height="12px"
+        class="inline-block h-2 w-2 fill-current opacity-60"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 2048 2048"
+      >
+        <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"
+        ></path>
       </svg>
     </div>
-    <ul tabindex="-1" class="dropdown-content bg-base-300 rounded-box z-1 w-52 p-2 shadow-2xl">
+    <ul
+      tabindex="-1"
+      class="dropdown-content bg-base-300 rounded-box z-1 w-52 p-2 shadow-2xl"
+    >
       <li>
         <input
-            type="radio"
-            name="theme-dropdown"
-            class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
-            aria-label="Default"
-            value="default"
-            onchange={setTheme} />
+          type="radio"
+          name="theme-dropdown"
+          class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+          aria-label="Default"
+          value="default"
+          onchange={setTheme}
+        />
       </li>
       <li>
         <input
-            type="radio"
-            name="theme-dropdown"
-            class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
-            aria-label="Light"
-            value="light"
-            onchange={setTheme} />
+          type="radio"
+          name="theme-dropdown"
+          class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+          aria-label="Light"
+          value="light"
+          onchange={setTheme}
+        />
       </li>
       <li>
         <input
-            type="radio"
-            name="theme-dropdown"
-            class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
-            aria-label="Dark"
-            value="dark"
-            onchange={setTheme} />
+          type="radio"
+          name="theme-dropdown"
+          class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+          aria-label="Dark"
+          value="dark"
+          onchange={setTheme}
+        />
       </li>
       <li>
         <input
-            type="radio"
-            name="theme-dropdown"
-            class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
-            aria-label="Autumn"
-            value="autumn"
-            onchange={setTheme} />
+          type="radio"
+          name="theme-dropdown"
+          class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+          aria-label="Autumn"
+          value="autumn"
+          onchange={setTheme}
+        />
       </li>
       <li>
         <input
-            type="radio"
-            name="theme-dropdown"
-            class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
-            aria-label="Cupcake"
-            value="cupcake"
-            onchange={setTheme} />
+          type="radio"
+          name="theme-dropdown"
+          class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+          aria-label="Cupcake"
+          value="cupcake"
+          onchange={setTheme}
+        />
       </li>
       <li>
         <input
-            type="radio"
-            name="theme-dropdown"
-            class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
-            aria-label="Dim"
-            value="dim"
-            onchange={setTheme} />
+          type="radio"
+          name="theme-dropdown"
+          class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+          aria-label="Dim"
+          value="dim"
+          onchange={setTheme}
+        />
       </li>
       <li>
         <input
-            type="radio"
-            name="theme-dropdown"
-            class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
-            aria-label="Emerald"
-            value="emerald"
-            onchange={setTheme} />
+          type="radio"
+          name="theme-dropdown"
+          class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+          aria-label="Emerald"
+          value="emerald"
+          onchange={setTheme}
+        />
       </li>
       <li>
         <input
-            type="radio"
-            name="theme-dropdown"
-            class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
-            aria-label="Night"
-            value="night"
-            onchange={setTheme} />
+          type="radio"
+          name="theme-dropdown"
+          class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+          aria-label="Night"
+          value="night"
+          onchange={setTheme}
+        />
       </li>
       <li>
         <input
-            type="radio"
-            name="theme-dropdown"
-            class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
-            aria-label="Nord"
-            value="nord"
-            onchange={setTheme} />
+          type="radio"
+          name="theme-dropdown"
+          class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+          aria-label="Nord"
+          value="nord"
+          onchange={setTheme}
+        />
       </li>
       <li>
         <input
-            type="radio"
-            name="theme-dropdown"
-            class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
-            aria-label="Retro"
-            value="retro"
-            onchange={setTheme} />
+          type="radio"
+          name="theme-dropdown"
+          class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+          aria-label="Retro"
+          value="retro"
+          onchange={setTheme}
+        />
       </li>
     </ul>
   </div>
-  <div>Locale: { appSettings?.locale }</div>
+  <div>Locale: {appSettings?.locale}</div>
   <div class="dropdown mb-2">
     <div tabindex="0" role="button" class="btn m-1">
       {$_('settings.language')}
       <svg
-          width="12px"
-          height="12px"
-          class="inline-block h-2 w-2 fill-current opacity-60"
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 2048 2048">
-        <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path>
+        width="12px"
+        height="12px"
+        class="inline-block h-2 w-2 fill-current opacity-60"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 2048 2048"
+      >
+        <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"
+        ></path>
       </svg>
     </div>
-    <ul tabindex="-1" class="dropdown-content bg-base-300 rounded-box z-1 w-52 p-2 shadow-2xl">
+    <ul
+      tabindex="-1"
+      class="dropdown-content bg-base-300 rounded-box z-1 w-52 p-2 shadow-2xl"
+    >
       <li>
         <input
-            type="radio"
-            name="theme-dropdown"
-            class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
-            aria-label="Default"
-            value="en-US"
-            onchange={setLocale} />
+          type="radio"
+          name="theme-dropdown"
+          class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+          aria-label="Default"
+          value="en-US"
+          onchange={setLocale}
+        />
       </li>
       <li>
         <input
-            type="radio"
-            name="theme-dropdown"
-            class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
-            aria-label="Pseudo Locale for Testing"
-            value="en-XA"
-            onchange={setLocale} />
+          type="radio"
+          name="theme-dropdown"
+          class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+          aria-label="Pseudo Locale for Testing"
+          value="en-XA"
+          onchange={setLocale}
+        />
       </li>
     </ul>
   </div>
 </main>
-
