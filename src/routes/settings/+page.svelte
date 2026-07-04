@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { themeService } from '$lib/services/theme-service.svelte';
-  import I18nService from '$lib/services/i18n-service';
+  import I18nService from '$lib/services/i18n-service.svelte';
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
   import {

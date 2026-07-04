@@ -5,5 +5,5 @@
 export const ssr = false;
 export const prerender = true;
 
-import I18nService from '$lib/services/i18n-service';
+import I18nService from '$lib/services/i18n-service.svelte';
 I18nService.initialize().then();
