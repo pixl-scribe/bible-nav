@@ -10,7 +10,7 @@
   });
 </script>
 
-<main class="flex p-1 flex-1 items-start">
+<main class="flex p-1 flex-1 items-start drawer">
   <LeftNav />
   <div
     class="flex bg-base-200 rounded-box rounded-xl w-full flex-1 max-w-140 p-2 ml-1 h-full items-start"
@@ -22,7 +22,7 @@
       </label>
       <div class="divider divider-horizontal mx-1"></div>
       <button
-        class="btn btn-neutral px-1 tooltip tooltip-bottom"
+        class="btn btn-soft btn-primary px-1 tooltip tooltip-bottom"
         data-tip={$_('main.add-parallel')}
       >
         <Plus size={16} />
@@ -31,7 +31,7 @@
     </div>
   </div>
   <button
-    class="btn btn-neutral ml-1 px-1 tooltip tooltip-bottom"
+    class="btn btn-soft btn-primary ml-1 px-1 mt-2 tooltip tooltip-bottom"
     data-tip={$_('main.new-search')}
   >
     <Plus size={16} />
