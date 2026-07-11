@@ -18,7 +18,7 @@
     <div class="flex w-full">
       <label class="input w-full">
         <Search />
-        <input type="search" required placeholder="Search" />
+        <input type="search" required placeholder={$_('main.search')} />
       </label>
       <div class="divider divider-horizontal mx-1"></div>
       <button

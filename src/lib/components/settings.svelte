@@ -32,12 +32,16 @@
   });
 </script>
 
-{#snippet themeOption(label: string, value: string)}
-  <option {value} selected={appSettings?.theme === value}>{label}</option>
+{#snippet themeOption(value: string)}
+  <option {value} selected={appSettings?.theme === value}
+    >{$_(`settings.theme.${value}`)}</option
+  >
 {/snippet}
 
-{#snippet languageOption(label: string, value: string)}
-  <option {value} selected={appSettings?.locale === value}>{label}</option>
+{#snippet languageOption(value: string)}
+  <option {value} selected={appSettings?.locale === value}
+    >{$_(`settings.language.${value}`)}</option
+  >
 {/snippet}
 
 <div class="flex p-1 items-center border-b border-base-content/10">
@@ -51,24 +55,24 @@
   <fieldset class="fieldset">
     <legend class="fieldset-legend">{$_('settings.theme')}</legend>
     <select class="select" onchange={setTheme}>
-      {@render themeOption('Default', 'default')}
-      {@render themeOption('Light', 'light')}
-      {@render themeOption('Dark', 'dark')}
-      {@render themeOption('Autumn', 'autumn')}
-      {@render themeOption('Cupcake', 'cupcake')}
-      {@render themeOption('Dim', 'dim')}
-      {@render themeOption('Emerald', 'emerald')}
-      {@render themeOption('Night', 'night')}
-      {@render themeOption('Nord', 'nord')}
-      {@render themeOption('Retro', 're etro')}
+      {@render themeOption('default')}
+      {@render themeOption('light')}
+      {@render themeOption('dark')}
+      {@render themeOption('autumn')}
+      {@render themeOption('cupcake')}
+      {@render themeOption('dim')}
+      {@render themeOption('emerald')}
+      {@render themeOption('night')}
+      {@render themeOption('nord')}
+      {@render themeOption('retro')}
     </select>
   </fieldset>
 
   <fieldset class="fieldset">
     <legend class="fieldset-legend">{$_('settings.language')}</legend>
     <select class="select" onchange={setLocale}>
-      {@render languageOption('English', 'en-US')}
-      {@render languageOption('Pseudo Locale for Testing', 'en-XA')}
+      {@render languageOption('en-US')}
+      {@render languageOption('en-XA')}
     </select>
   </fieldset>
 </div>

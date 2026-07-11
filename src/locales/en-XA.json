@@ -1,8 +1,25 @@
 {
   "common.app-name": "[!!ßĩƀĺē Ńàv!!]",
   "common.return-home": "[!!Ŕēţũŕń Ţō Ĥōḿē!!]",
+  "main.search": "[!!Śēàŕćĥ!!]",
+  "main.new-search": "[!!Ńēŵ Śēàŕćĥ!!]",
+  "main.add-parallel": "[!!Àďď Ƥàŕàĺĺēĺ Ţēxţ!!]",
   "home.app-settings": "[!!Àƥƥĺĩćàţĩōń Śēţţĩńĝś!!]",
   "settings.heading": "[!!Àƥƥĺĩćàţĩōń Śēţţĩńĝś!!]",
   "settings.theme": "[!!Ţĥēḿē!!]",
-  "settings.language": "[!!Ĺàńĝũàĝē!!]"
+  "settings.theme.default": "[!!Ďēƒàũĺţ!!]",
+  "settings.theme.lignt": "[!!Ĺĩĝĥţ!!]",
+  "settings.theme.dark": "[!!Ďàŕķ!!]",
+  "settings.theme.autumn": "[!!Àũţũḿń!!]",
+  "settings.theme.cupcake": "[!!Ćũƥćàķē!!]",
+  "settings.theme.dim": "[!!Ďĩḿ!!]",
+  "settings.theme.emerald": "[!!Ēḿēŕàĺď!!]",
+  "settings.theme.night": "[!!Ńĩĝĥţ!!]",
+  "settings.theme.nord": "[!!Ńōŕď!!]",
+  "settings.theme.retro": "[!!Ŕēţŕō!!]",
+  "settings.language": "[!!Ĺàńĝũàĝē!!]",
+  "settings.language.en-US": "[!!Ēńĝĺĩśĥ!!]",
+  "settings.language.en-XA": "[!!Ƥśēũďō Ĺōćàĺē ƒōŕ Ţēśţĩńĝ!!]",
+  "left-nav.modules": "[!!Ḿōďũĺēś!!]",
+  "left-nav.settings": "[!!Śēţţĩńĝś!!]"
 }
