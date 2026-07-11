@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "bible-nav",
+  "productName": "Bible Nav",
   "version": "0.1.0",
   "identifier": "org.bible-nav",
   "build": {
@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "bible-nav",
+        "label": "main",
+        "title": "Bible Nav",
         "width": 1280,
-        "height": 768
+        "height": 768,
+        "backgroundColor": "#1d232a"
       }
     ],
     "security": {
