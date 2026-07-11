@@ -1,9 +1,12 @@
 <script lang="ts">
-  import { LibraryBig, Settings as SettingsIcon } from '@lucide/svelte';
+  import { Info, LibraryBig, Settings as SettingsIcon } from '@lucide/svelte';
   import { _ } from 'svelte-i18n';
   import Settings from './settings.svelte';
+  import AboutDialog from './about-dialog.svelte';
 
   let isSettingsOpen = $state(false);
+  // eslint-disable-next-line no-undef
+  let aboutDialogRef = $state<HTMLDialogElement>();
 
   function openSettingsDrawer() {
     isSettingsOpen = true;
@@ -34,6 +37,18 @@
       <SettingsIcon />
     </a>
   </li>
+  <li>
+    <!-- svelte-ignore a11y_missing_attribute, a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+    <a
+      class="btn btn-soft btn-primary tooltip tooltip-right"
+      data-tip={$_('left-nav.about')}
+      onclick={() => {
+        aboutDialogRef?.showModal();
+      }}
+    >
+      <Info />
+    </a>
+  </li>
 </ul>
 
 <input
@@ -50,3 +65,5 @@
     <Settings onClose={closeSettingsDrawer} />
   </div>
 </div>
+
+<AboutDialog bind:dialog={aboutDialogRef} />

@@ -1,10 +1,8 @@
 {
   "common.app-name": "[!!ßĩƀĺē Ńàv!!]",
-  "common.return-home": "[!!Ŕēţũŕń Ţō Ĥōḿē!!]",
   "main.search": "[!!Śēàŕćĥ!!]",
   "main.new-search": "[!!Ńēŵ Śēàŕćĥ!!]",
   "main.add-parallel": "[!!Àďď Ƥàŕàĺĺēĺ Ţēxţ!!]",
-  "home.app-settings": "[!!Àƥƥĺĩćàţĩōń Śēţţĩńĝś!!]",
   "settings.heading": "[!!Àƥƥĺĩćàţĩōń Śēţţĩńĝś!!]",
   "settings.theme": "[!!Ţĥēḿē!!]",
   "settings.theme.default": "[!!Ďēƒàũĺţ!!]",
@@ -21,5 +19,8 @@
   "settings.language.en-US": "[!!Ēńĝĺĩśĥ!!]",
   "settings.language.en-XA": "[!!Ƥśēũďō Ĺōćàĺē ƒōŕ Ţēśţĩńĝ!!]",
   "left-nav.modules": "[!!Ḿōďũĺēś!!]",
-  "left-nav.settings": "[!!Śēţţĩńĝś!!]"
+  "left-nav.settings": "[!!Śēţţĩńĝś!!]",
+  "left-nav.about": "[!!Àƀōũţ!!]",
+  "about.version-label": "[!!Vēŕśĩōń!!]",
+  "about.copyright": "[!!ßĩƀĺē Ńàv Ćōƥŷŕĩĝĥţ © {copyrightYear} ƥĩxĺ-śćŕĩƀē. Ţĥĩś ƥŕōĝŕàḿ ĩś ƒŕēē śōƒţŵàŕē; ŷōũ ćàń ŕēďĩśţŕĩƀũţē ĩţ àńď/ōŕ ḿōďĩƒŷ ĩţ ũńďēŕ ţĥē ţēŕḿś ōƒ ţĥē ĜŃŨ Ĝēńēŕàĺ Ƥũƀĺĩć Ĺĩćēńśē v3. Ţĥĩś śōƒţŵàŕē ĩś ďĩśţŕĩƀũţēď ŵĩţĥ ŃŌ ŴÀŔŔÀŃŢŶ. Vĩēŵ ţĥē ƒũĺĺ ĺĩćēńśē àţ:!!]"
 }

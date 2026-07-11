@@ -7,12 +7,17 @@
   ],
   "permissions": [
     "core:default",
+    "core:app:default",
+    "core:app:allow-version",
     "opener:default",
     "store:default",
+    "store:allow-load",
     "sql:default",
     "sql:allow-load",
     "sql:allow-execute",
     "sql:allow-select",
-    "sql:allow-close"
+    "sql:allow-close",
+    "shell:default",
+    "shell:allow-open"
   ]
 }
