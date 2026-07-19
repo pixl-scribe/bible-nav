@@ -4,9 +4,11 @@
   import { themeService } from '$lib/services/theme-service.svelte.js';
   import LeftNav from '$lib/components/left-nav.svelte';
   import { _ } from 'svelte-i18n';
+  import ModuleService from '$lib/services/module-service.svelte';
 
   onMount(async () => {
     await themeService.loadTheme();
+    await ModuleService.search('eng_kjv');
   });
 </script>
 

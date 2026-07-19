@@ -3,7 +3,6 @@
   import { onMount } from 'svelte';
   import { getVersion } from '@tauri-apps/api/app';
   import { open } from '@tauri-apps/plugin-shell';
-  import {get} from "svelte/store";
 
   // eslint-disable-next-line no-undef
   let { dialog = $bindable() }: { dialog: HTMLDialogElement | undefined } =
@@ -73,7 +72,7 @@
     </div>
     <div class="modal-action">
       <form method="dialog">
-        <button class="btn">Close</button>
+        <button class="btn">{$_('common.close')}</button>
       </form>
     </div>
   </div>

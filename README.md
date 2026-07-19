@@ -12,6 +12,7 @@ Bible Nav is a cross-platform Bible desktop application built to be
 npm run tauri dev    # runs app in dev mode
 npm run lint         # lints the typescript
 npm run pseudolocale # regenerate the locales/en-XA.json pseudo locale file for i18n testing
+npm run copy-db      # copy and compress default kjv sqlite DB to resources folder
 ```
 
 ## Build Steps

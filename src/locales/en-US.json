@@ -1,5 +1,6 @@
 {
   "common.app-name": "Bible Nav",
+  "common.close": "Close",
   "main.search": "Search",
   "main.new-search": "New Search",
   "main.add-parallel": "Add Parallel Text",
