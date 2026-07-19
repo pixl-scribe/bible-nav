@@ -1,10 +1,13 @@
 import Database from '@tauri-apps/plugin-sql';
 import { appDataDir } from '@tauri-apps/api/path';
+import verseCounts from '../assets/bible-verse-counts.yaml';
 
 export default class ModuleService {
-  public static async search(moduleId: string) {
+  constructor(private moduleId: string) {}
+
+  public async getText() {
     const appData = await appDataDir();
-    const dbPath = `sqlite:${appData}/modules/${moduleId}.db`;
+    const dbPath = `sqlite:${appData}/modules/${this.moduleId}.db`;
     let db: Database | undefined;
     try {
       db = await Database.load(dbPath);
@@ -15,7 +18,7 @@ export default class ModuleService {
 
     try {
       const books = await db.select('SELECT * FROM books');
-      console.log(books);
+      console.log({ verseCounts, keys: Object.keys(verseCounts.OT), books });
     } finally {
       db?.close();
     }
