@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { _ } from 'svelte-i18n';
   import ModuleService from '$lib/services/module-service.svelte';
+  import type {GlossaryWord} from "$lib/model/verse";
 
   let { moduleId }: { moduleId: string } = $props();
 
@@ -10,7 +11,6 @@
 
   onMount(async () => {
     moduleService = new ModuleService(moduleId);
-    await moduleService?.getText();
   });
 </script>
 
@@ -31,7 +31,20 @@
       <Columns2 />
     </button>
   </div>
-  <div class="flex flex-col w-full">
+  <div class="flex flex-col w-full overflow-y-auto">
     {moduleId}
+    {moduleService?.verses.length}
+    {#each moduleService?.verses as verse (verse.sid)}
+      <div class="flex flex-wrap">
+        <span>{verse.sid}&nbsp;</span>
+        {#each verse.children as child, index (index)}
+          {#if typeof child === 'string'}
+            <span class="flex">{child}&nbsp;</span>
+          {:else if typeof child === 'object' && child.style === 'w'}
+            <span class="flex">{child.txt}&nbsp;</span>
+          {/if}
+        {/each}
+      </div>
+    {/each}
   </div>
 </div>
