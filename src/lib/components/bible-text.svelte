@@ -15,9 +15,9 @@
 </script>
 
 <div
-  class="flex flex-col bg-base-200 rounded-box rounded-xl w-full flex-1 max-w-140 p-2 ml-1 h-full items-start"
+  class="flex flex-col bg-base-200 rounded-box rounded-xl w-full flex-1 max-w-140 ml-1 h-full items-start"
 >
-  <div class="flex w-full">
+  <div class="flex w-full p-2 border-b border-base-content/10">
     <label class="input w-full">
       <Search />
       <input type="search" required placeholder={$_('bible-text.search')} />
@@ -31,17 +31,21 @@
       <Columns2 />
     </button>
   </div>
-  <div class="flex flex-col w-full overflow-y-auto">
-    {moduleId}
-    {moduleService?.verses.length}
+  <div class="flex flex-col w-full overflow-y-auto text-lg leading-relaxed p-2">
     {#each moduleService?.verses as verse (verse.sid)}
-      <div class="flex flex-wrap">
-        <span>{verse.sid}&nbsp;</span>
+      <div class="flex flex-wrap items-center">
+        <div class="flex text-xs text-base-content/60">{verse.sid}</div>
         {#each verse.children as child, index (index)}
           {#if typeof child === 'string'}
-            <span class="flex">{child}&nbsp;</span>
+            {#if /^[a-zA-Z]/.test(child)}
+              &nbsp;
+            {/if}
+            <div class="flex">{child}</div>
           {:else if typeof child === 'object' && child.style === 'w'}
-            <span class="flex">{child.txt}&nbsp;</span>
+            {#if /^[a-zA-Z]/.test(child.txt)}
+              &nbsp;
+            {/if}
+            <span class="flex">{child.txt}</span>
           {/if}
         {/each}
       </div>
