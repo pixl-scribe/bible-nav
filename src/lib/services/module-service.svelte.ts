@@ -47,7 +47,7 @@ export default class ModuleService {
         currentChapterSid,
         ...next,
       ]);
-      console.log({ prior, currentChapterSid, next, verses: this.verses });
+      // console.log({ prior, currentChapterSid, next, verses: this.verses });
     }
   }
 

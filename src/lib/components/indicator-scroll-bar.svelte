@@ -1,6 +1,17 @@
 <script lang="ts">
+  import type { BibleVerseCounts } from '$lib/model/bible-verse-counts';
+  import rawVerseCounts from '../assets/bible-verse-counts.yaml';
+  const verseCounts = rawVerseCounts as BibleVerseCounts;
+
   let { value = $bindable(0) }: { value?: number } = $props();
 
+  const books = { ...verseCounts.OT, ...verseCounts.NT };
+  const verseCount = Object.values(books).reduce(
+    (acc, curr) => acc + curr.reduce((acc2, curr2) => acc2 + curr2, 0),
+    0
+  ); // 31,102 verses
+
+  //const totalVersesInBible = Object.values(books).reduce((c) );
   let trackEl = $state<HTMLDivElement>();
 
   function handlePointerDown(e: PointerEvent) {
@@ -22,6 +33,10 @@
     window.removeEventListener('pointermove', updateValue);
     window.removeEventListener('pointerup', stopDragging);
   }
+
+  function getReference() {
+    return `${Math.round((value / 100) * (verseCount - 1))}`;
+  }
 </script>
 
 <div class="flex justify-center flex-1 py-2">
@@ -37,7 +52,7 @@
   >
     <div
       class="slider-thumb flex justify-center align-items-center absolute h-6 left-1/2 tooltip tooltip-primary"
-      data-tip="Gen 1"
+      data-tip={getReference()}
       style="top: {value}%"
     >
       <div
