@@ -30,5 +30,8 @@ export default tseslint.config(
         parser: '@typescript-eslint/parser',
       },
     },
+    rules: {
+      'no-undef': 'off',
+    },
   }
 );

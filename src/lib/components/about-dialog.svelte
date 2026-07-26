@@ -4,7 +4,6 @@
   import { getVersion } from '@tauri-apps/api/app';
   import { open } from '@tauri-apps/plugin-shell';
 
-  // eslint-disable-next-line no-undef
   let { dialog = $bindable() }: { dialog: HTMLDialogElement | undefined } =
     $props();
 
@@ -22,7 +21,6 @@
   const licenseUrl =
     'https://github.com/pixl-scribe/bible-nav/blob/master/LICENSE';
 
-  // eslint-disable-next-line no-undef
   async function openLicense(event: MouseEvent) {
     event.preventDefault();
     await open(licenseUrl);
@@ -32,7 +30,6 @@
     try {
       appVersion = await getVersion();
     } catch (err) {
-      // eslint-disable-next-line no-undef
       console.error('Failed to get version', err);
     }
   });

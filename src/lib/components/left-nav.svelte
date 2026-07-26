@@ -5,7 +5,6 @@
   import AboutDialog from './about-dialog.svelte';
 
   let isSettingsOpen = $state(false);
-  // eslint-disable-next-line no-undef
   let aboutDialogRef = $state<HTMLDialogElement>();
 
   function openSettingsDrawer() {

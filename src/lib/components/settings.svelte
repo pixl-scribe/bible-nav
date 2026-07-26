@@ -13,14 +13,12 @@
 
   let { onClose }: { onClose: () => void } = $props();
 
-  // eslint-disable-next-line no-undef
   async function setTheme(event: Event & { currentTarget: HTMLSelectElement }) {
     const theme = event.currentTarget.value;
     await themeService.setTheme(theme);
   }
 
   async function setLocale(
-    // eslint-disable-next-line no-undef
     event: Event & { currentTarget: HTMLSelectElement }
   ) {
     const locale = event.currentTarget.value;
