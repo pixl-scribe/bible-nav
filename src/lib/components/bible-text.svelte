@@ -57,7 +57,7 @@
       {/each}
     </div>
     <div class="flex h-[calc(100vh-80px)] justify-center w-10">
-      <IndicatorScrollBar min={0} max={100} bind:value={scrollValue} />
+      <IndicatorScrollBar bind:value={scrollValue} />
     </div>
   </div>
 </div>

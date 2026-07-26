@@ -1,14 +1,7 @@
 <script lang="ts">
-  let {
-    value = $bindable(0),
-    min = 0,
-    max = 100,
-  }: { value?: number; min?: number; max?: number } = $props();
+  let { value = $bindable(0) }: { value?: number } = $props();
 
   let trackEl = $state<HTMLDivElement>();
-
-  // Compute thumb position percentage
-  let percentage = $derived(((value - min) / (max - min)) * 100);
 
   function handlePointerDown(e: PointerEvent) {
     updateValue(e);
@@ -19,18 +12,10 @@
   function updateValue(e: PointerEvent) {
     if (!trackEl) return;
     const rect = trackEl.getBoundingClientRect();
-    const clickY = e.clientY;
-
-    // Height from bottom up (inverted for vertical layout)
-    const bottom = rect.bottom;
-    const height = rect.height;
-    const rawPx = bottom - clickY;
-
-    let pct = (rawPx / height) * 100;
+    let pct = ((e.clientY - rect.top) / rect.height) * 100;
     if (pct < 0) pct = 0;
     if (pct > 100) pct = 100;
-
-    value = min + (pct / 100) * (max - min);
+    value = pct;
   }
 
   function stopDragging() {
@@ -46,14 +31,14 @@
     onpointerdown={handlePointerDown}
     role="slider"
     aria-valuenow={value}
-    aria-valuemin={min}
-    aria-valuemax={max}
+    aria-valuemin={0}
+    aria-valuemax={100}
     tabindex="0"
   >
     <div
       class="slider-thumb flex justify-center align-items-center absolute h-6 left-1/2 tooltip tooltip-primary"
       data-tip="Gen 1"
-      style="bottom: {percentage}%"
+      style="top: {value}%"
     >
       <div
         class="bg-primary mask mask-hexagon-2 w-8 h-6 absolute top-0 left-0"
@@ -68,7 +53,7 @@
     touch-action: none;
   }
   .slider-thumb {
-    transform: translate(-50%, 50%);
+    transform: translate(-50%, -50%);
     width: 40px;
   }
 </style>

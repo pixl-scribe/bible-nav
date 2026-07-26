@@ -32,7 +32,11 @@ npm run copy-db      # copy and compress default kjv sqlite DB to resources fold
 
 ## Build Steps
 
-`NO_STRIP=true npm run tauri build`
+```
+NO_STRIP=true npm run tauri build
+```
+
+The compiled executable can be found in `src-tauri/target/release`
 
 ## Run Steps
 
