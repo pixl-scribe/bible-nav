@@ -8,7 +8,7 @@
   let { moduleId }: { moduleId: string } = $props();
 
   let moduleService = $state<ModuleService | undefined>();
-  let scrollValue = $state<number>(50);
+  let scrollValue = $state<number>(0);
 
   onMount(async () => {
     moduleService = new ModuleService(moduleId);
@@ -56,7 +56,7 @@
         </div>
       {/each}
     </div>
-    <div class="flex h-[calc(100vh-80px)] justify-center w-10">
+    <div class="flex h-[calc(100vh-80px)] justify-center w-10 ml-1">
       <IndicatorScrollBar bind:value={scrollValue} />
     </div>
   </div>
@@ -64,9 +64,10 @@
 
 <style>
   .scrollable-region {
+    scrollbar-width: none; /* Firefox */
     scrollbar-color: rgba(0, 0, 0, 0) rgba(0, 0, 0, 0); /* Do not want to show the real scrollbar. */
-    &::-webkit-scrollbar-thumb {
-      background-color: rgba(0, 0, 0, 0);
+    &::-webkit-scrollbar {
+      display: none;
     }
   }
 </style>
