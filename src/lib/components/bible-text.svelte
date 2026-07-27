@@ -57,7 +57,10 @@
       {/each}
     </div>
     <div class="flex h-[calc(100vh-80px)] justify-center w-10 ml-1">
-      <IndicatorScrollBar bind:value={scrollValue} />
+      <IndicatorScrollBar
+        bind:value={scrollValue}
+        books={moduleService?.books ?? {}}
+      />
     </div>
   </div>
 </div>

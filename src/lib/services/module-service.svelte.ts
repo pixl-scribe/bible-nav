@@ -3,6 +3,7 @@ import { appDataDir } from '@tauri-apps/api/path';
 import verseCounts from '../assets/bible-verse-counts.yaml';
 import type { TestamentVerseCounts } from '$lib/model/bible-verse-counts';
 import type { Verse, VerseChild, VerseRow } from '$lib/model/verse';
+import type { Book } from '$lib/model/book';
 
 export type SearchType = 'ref' | 'ref-point' | 'text';
 const defaultSearch = 'GEN 1:1';
@@ -28,13 +29,25 @@ export default class ModuleService {
   public currentSearch = $state<string | undefined>(defaultSearch);
   public currentSearchType = $state<SearchType | undefined>(defaultSearchType);
   public verses = $state<Verse[]>([]);
+  public books = $state<Record<string, Book>>({});
 
   constructor(private moduleId: string) {
     $effect(() => {
       const currentSearch = this.currentSearch ?? defaultSearch;
       const currentSearchType = this.currentSearchType ?? defaultSearchType;
+      this.getBooks().then();
       this.getText(currentSearch, currentSearchType).then();
     });
+  }
+
+  private async getBooks() {
+    const db = await this.getDb();
+    try {
+      const books = await db.select<Book[]>('SELECT * FROM books');
+      this.books = Object.fromEntries(books.map((book) => [book.code, book]));
+    } finally {
+      db?.close();
+    }
   }
 
   private async getText(currentSearch: string, currentSearchType: SearchType) {
@@ -51,22 +64,8 @@ export default class ModuleService {
     }
   }
 
-  private async getDbPath(): Promise<string> {
-    if (this.dbPath) return this.dbPath;
-    const appData = await appDataDir();
-    this.dbPath = `sqlite:${appData}/modules/${this.moduleId}.db`;
-    return this.dbPath;
-  }
-
   private async getChapters(chapterSids: string[]): Promise<Verse[]> {
-    const dbPath = await this.getDbPath();
-    let db: Database | undefined;
-    try {
-      db = await Database.load(dbPath);
-    } catch (err) {
-      console.error(`Error connecting to ${dbPath}`, err);
-      throw err;
-    }
+    const db = await this.getDb();
 
     let verses: Verse[];
     try {
@@ -90,6 +89,23 @@ export default class ModuleService {
       db?.close();
     }
     return verses;
+  }
+
+  private async getDb(): Promise<Database> {
+    const dbPath = await this.getDbPath();
+    try {
+      return await Database.load(dbPath);
+    } catch (err) {
+      console.error(`Error connecting to ${dbPath}`, err);
+      throw err;
+    }
+  }
+
+  private async getDbPath(): Promise<string> {
+    if (this.dbPath) return this.dbPath;
+    const appData = await appDataDir();
+    this.dbPath = `sqlite:${appData}/modules/${this.moduleId}.db`;
+    return this.dbPath;
   }
 
   /**

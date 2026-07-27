@@ -1,12 +1,16 @@
 <script lang="ts">
   import type { BibleVerseCounts } from '$lib/model/bible-verse-counts';
   import rawVerseCounts from '../assets/bible-verse-counts.yaml';
+  import type { Book } from '$lib/model/book';
   const verseCounts = rawVerseCounts as BibleVerseCounts;
 
-  let { value = $bindable(0) }: { value?: number } = $props();
+  let {
+    value = $bindable(0),
+    books,
+  }: { value?: number; books: Record<string, Book> } = $props();
 
-  const books = { ...verseCounts.OT, ...verseCounts.NT };
-  const verseCount = Object.values(books).reduce(
+  const allVerseCounts = { ...verseCounts.OT, ...verseCounts.NT };
+  const verseCount = Object.values(allVerseCounts).reduce(
     (acc, curr) => acc + curr.reduce((acc2, curr2) => acc2 + curr2, 0),
     0
   ); // 31,102 verses
@@ -34,8 +38,24 @@
     window.removeEventListener('pointerup', stopDragging);
   }
 
-  function getReference() {
-    return `${Math.round((value / 100) * (verseCount - 1))}`;
+  function getReference(): string {
+    const verseIndex = Math.round((value / 100) * (verseCount - 1));
+    let foundBookCode: string;
+    let verseAccum = 0;
+    for (const bookCode of Object.keys(allVerseCounts)) {
+      foundBookCode = bookCode;
+      const chapterCounts = allVerseCounts[bookCode];
+      for (const [index, versesInChapter] of chapterCounts.entries()) {
+        const foundChapter = index + 1;
+        if (verseAccum + versesInChapter > verseIndex) {
+          const book = books[foundBookCode];
+          const verse = verseIndex - verseAccum + 1;
+          return `${book?.toc3} ${foundChapter}:${verse}`;
+        }
+        verseAccum += versesInChapter;
+      }
+    }
+    return '';
   }
 </script>
 
