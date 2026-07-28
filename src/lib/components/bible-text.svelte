@@ -8,10 +8,17 @@
   let { moduleId }: { moduleId: string } = $props();
 
   let moduleService = $state<ModuleService | undefined>();
-  let scrollValue = $state<number>(0);
+  let scrollValue = $state<number | undefined>(undefined);
 
   onMount(async () => {
     moduleService = new ModuleService(moduleId);
+  });
+
+  $effect(() => {
+    // Need to wait for books to be read before setting the scroll value.
+    if (moduleService?.books && Object.keys(moduleService?.books).length > 0) {
+      scrollValue = 0;
+    }
   });
 </script>
 

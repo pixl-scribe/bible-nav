@@ -2,13 +2,16 @@
   import type { BibleVerseCounts } from '$lib/model/bible-verse-counts';
   import rawVerseCounts from '../assets/bible-verse-counts.yaml';
   import type { Book } from '$lib/model/book';
+  import debounce from '$lib/services/debounce';
+
   const verseCounts = rawVerseCounts as BibleVerseCounts;
 
   let {
-    value = $bindable(0),
+    value = $bindable(undefined),
     books,
-  }: { value?: number; books: Record<string, Book> } = $props();
+  }: { value: number | undefined; books: Record<string, Book> } = $props();
 
+  let referenceLabel = $state<string>('');
   const allVerseCounts = { ...verseCounts.OT, ...verseCounts.NT };
   const verseCount = Object.values(allVerseCounts).reduce(
     (acc, curr) => acc + curr.reduce((acc2, curr2) => acc2 + curr2, 0),
@@ -38,7 +41,13 @@
     window.removeEventListener('pointerup', stopDragging);
   }
 
-  function getReference(): string {
+  const setRefenceDeBounced = debounce(setReference, 10);
+
+  function setReference(value: number | undefined): void {
+    if (value === undefined) {
+      referenceLabel = '';
+      return;
+    }
     const verseIndex = Math.round((value / 100) * (verseCount - 1));
     let foundBookCode: string;
     let verseAccum = 0;
@@ -50,13 +59,18 @@
         if (verseAccum + versesInChapter > verseIndex) {
           const book = books[foundBookCode];
           const verse = verseIndex - verseAccum + 1;
-          return `${book?.toc3} ${foundChapter}:${verse}`;
+          referenceLabel = `${book?.toc3} ${foundChapter}:${verse}`;
+          return;
         }
         verseAccum += versesInChapter;
       }
     }
-    return '';
+    referenceLabel = '';
   }
+
+  $effect(() => {
+    setRefenceDeBounced(value);
+  });
 </script>
 
 <div class="flex justify-center flex-1 py-2">
@@ -71,8 +85,8 @@
     tabindex="0"
   >
     <div
-      class="slider-thumb flex justify-center align-items-center absolute h-6 left-1/2 tooltip tooltip-primary"
-      data-tip={getReference()}
+      class="slider-thumb flex justify-center align-items-center absolute h-6 left-1/2 tooltip tooltip-primary z-10"
+      data-tip={referenceLabel}
       style="top: {value}%"
     >
       <div
