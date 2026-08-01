@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Verse } from '$lib/model/verse';
   import type ModuleService from '$lib/services/module-service.svelte';
+
   let {
     verses,
     class: className = '',
@@ -12,16 +13,28 @@
   } = $props();
 
   const isTextRegex = /^[a-zA-Z¶]/;
+
+  $effect(() => {
+    if (moduleService && moduleService?.scrollToSid) {
+      const el = document.getElementById(moduleService.scrollToSid);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      moduleService.scrollToSid = undefined;
+    }
+  });
 </script>
 
 <div class="flex flex-wrap items-center {className} my-2">
   {#each verses as verse, i (verse.sid)}
     {#if i === 0}
-      <span class="flex text-xs text-base-content/60"
+      <span class="flex text-xs text-base-content/60" id={verse.sid}
         >{moduleService?.formatRefFromSid(verse.sid)}</span
       >
     {:else}
-      <span class="flex text-xs text-base-content/60">{verse.nbr}</span>
+      <span class="flex text-xs text-base-content/60" id={verse.sid}
+        >{verse.nbr}</span
+      >
     {/if}
     {#each verse.children as child, index (index)}
       {#if typeof child === 'string'}

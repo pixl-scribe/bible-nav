@@ -17,6 +17,7 @@ export default class ModuleService {
   public activePara = $state<Verse[]>([]);
   public nextParaBuffer = $state<Record<number, Verse[]>>({});
   public books = $state<Record<string, Book>>({});
+  public scrollToSid = $state<string | undefined>();
 
   constructor(private moduleId: string) {
     this.getBooks().then();
@@ -56,6 +57,7 @@ export default class ModuleService {
         this.prevParaBuffer = prev;
         this.activePara = active;
         this.nextParaBuffer = next;
+        this.scrollToSid = currentSearch;
       }
     }
   }
