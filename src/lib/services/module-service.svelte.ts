@@ -26,6 +26,7 @@ const allChapterSids = [
 
 export default class ModuleService {
   private db: Database | undefined;
+  private getTextStart = $state<number | undefined>();
   public currentSearch = $state<string | undefined>(defaultSearch);
   public currentSearchType = $state<SearchType | undefined>(defaultSearchType);
   public verses = $state<Verse[]>([]);
@@ -47,16 +48,21 @@ export default class ModuleService {
   }
 
   private async getText(currentSearch: string, currentSearchType: SearchType) {
+    const start = Date.now();
+    this.getTextStart = start;
     if (currentSearchType === 'ref-point') {
       const currentChapterSid = ModuleService.getChapterSid(currentSearch);
       const prior = ModuleService.getPriorChapterSids(currentChapterSid, 3);
       const next = ModuleService.getNextChapterSids(currentChapterSid, 3);
-      this.verses = await this.getChapters([
+      const verses = await this.getChapters([
         ...prior,
         currentChapterSid,
         ...next,
       ]);
-      // console.log({ prior, currentChapterSid, next, verses: this.verses });
+      // Only set results if this is the last call to getText.
+      if (this.getTextStart === start) {
+        this.verses = verses;
+      }
     }
   }
 
