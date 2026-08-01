@@ -47,11 +47,11 @@
       {moduleService?.currentSearchType}
       {moduleService?.currentSearch}
       {#each Object.entries(moduleService?.prevParaBuffer ?? {}) as [paraIndex, verses] (paraIndex)}
-        <Paragraph {verses} class="bg-green-900 -900" />
+        <Paragraph {verses} {moduleService} class="bg-green-950" />
       {/each}
-      <Paragraph verses={moduleService?.activePara ?? []} />
+      <Paragraph verses={moduleService?.activePara ?? []} {moduleService} />
       {#each Object.entries(moduleService?.nextParaBuffer ?? {}) as [paraIndex, verses] (paraIndex)}
-        <Paragraph {verses} class="bg-blue-900" />
+        <Paragraph {verses} {moduleService} class="bg-blue-950" />
       {/each}
     </div>
     <div class="flex h-[calc(100vh-80px)] justify-center w-10 ml-1">

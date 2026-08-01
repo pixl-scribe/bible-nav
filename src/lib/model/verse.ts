@@ -38,11 +38,13 @@ export type VerseChild =
 export interface Verse {
   paragraph: number;
   sid: string;
+  nbr: number;
   children: VerseChild[];
 }
 
 export interface VerseRow {
   sid: string;
+  nbr: number;
   paragraph: number;
   children: string;
 }

@@ -1,7 +1,5 @@
 import Database from '@tauri-apps/plugin-sql'; // requires svelte service
 import { appDataDir } from '@tauri-apps/api/path';
-import verseCounts from '../assets/bible-verse-counts.yaml';
-import type { TestamentVerseCounts } from '$lib/model/bible-verse-counts';
 import type { Verse, VerseChild, VerseRow } from '$lib/model/verse';
 import type { Book } from '$lib/model/book';
 
@@ -9,21 +7,6 @@ export type SearchType = 'ref' | 'ref-point' | 'text';
 const defaultSearch = 'GEN 1:1';
 const defaultSearchType: SearchType = 'ref-point';
 const paraBuffer = 2;
-
-function getTestamentChapterSids(
-  testamentVerseCounts: TestamentVerseCounts
-): string[] {
-  return Object.keys(testamentVerseCounts).flatMap((bookCode: string) => {
-    return Array.from(
-      { length: testamentVerseCounts[bookCode].length },
-      (_, index) => `${bookCode} ${index + 1}`
-    );
-  });
-}
-const allChapterSids = [
-  ...getTestamentChapterSids(verseCounts.OT),
-  ...getTestamentChapterSids(verseCounts.NT),
-];
 
 export default class ModuleService {
   private db: Database | undefined;
@@ -42,6 +25,17 @@ export default class ModuleService {
       const currentSearchType = this.currentSearchType ?? defaultSearchType;
       this.getText(currentSearch, currentSearchType).then();
     });
+  }
+
+  /**
+   * Converts verse refs (e.g. 'GEN 1:1') to formatted ref (e.g. 'Genesis 1:1')
+   */
+  public formatRefFromSid(sid: string) {
+    const [bookId, verseRef] = sid.split(' ');
+    if (!bookId || !verseRef) return '';
+    const book = this.books[bookId];
+    if (!book) return '';
+    return `${book.toc2} ${verseRef}`;
   }
 
   private async getBooks() {
@@ -86,15 +80,16 @@ export default class ModuleService {
     const start = Date.now();
     const verseResults = await db.select<VerseRow[]>(
       `
-          SELECT v.sid, v.paragraph, v.children
+          SELECT v.sid, v.nbr, v.paragraph, v.children
           FROM verses v
           WHERE v.paragraph BETWEEN $1 AND $2`,
       [fromPara, thruPara]
     );
     console.log(`sel ran in ${Date.now() - start}ms.`); // TODO: remove this
 
-    const mapVerse = ({ sid, paragraph, children }: VerseRow): Verse => ({
+    const mapVerse = ({ sid, nbr, paragraph, children }: VerseRow): Verse => ({
       sid,
+      nbr,
       paragraph,
       children: JSON.parse(children) as VerseChild[],
     });
@@ -133,33 +128,5 @@ export default class ModuleService {
   private async getDbPath(): Promise<string> {
     const appData = await appDataDir();
     return `sqlite:${appData}/modules/${this.moduleId}.db?immutable=1&mode=ro`;
-  }
-
-  /**
-   * Converts verse refs (e.g. 'GEN 1:1') to chapter refs (e.g. 'GEN 1')
-   */
-  private static getChapterSid(refPoint: string) {
-    return refPoint.split(':')?.[0];
-  }
-
-  private static getPriorChapterSids(
-    currentSid: string,
-    count: number
-  ): string[] {
-    const index = allChapterSids.indexOf(currentSid);
-    if (index < 0) return [];
-    const start = Math.max(0, index - count);
-    return allChapterSids.slice(start, index);
-  }
-
-  private static getNextChapterSids(
-    currentSid: string,
-    count: number
-  ): string[] {
-    const index = allChapterSids.indexOf(currentSid);
-    if (index < 0) return [];
-    const start = index + 1;
-    const end = start + count;
-    return allChapterSids.slice(start, end);
   }
 }
