@@ -4,6 +4,7 @@
   import { _ } from 'svelte-i18n';
   import ModuleService from '$lib/services/module-service.svelte';
   import IndicatorScrollBar from './indicator-scroll-bar.svelte';
+  import Paragraph from './paragraph.svelte';
 
   let { moduleId }: { moduleId: string } = $props();
 
@@ -45,30 +46,16 @@
     >
       {moduleService?.currentSearchType}
       {moduleService?.currentSearch}
-      {#each moduleService?.verses as verse (verse.sid)}
-        <div class="flex flex-wrap items-center">
-          <div class="flex text-xs text-base-content/60">{verse.sid}</div>
-          {#each verse.children as child, index (index)}
-            {#if typeof child === 'string'}
-              {#if /^[a-zA-Z]/.test(child)}
-                &nbsp;
-              {/if}
-              <div class="flex">{child}</div>
-            {:else if typeof child === 'object' && child.style === 'w'}
-              {#if /^[a-zA-Z]/.test(child.txt)}
-                &nbsp;
-              {/if}
-              <span class="flex">{child.txt}</span>
-            {/if}
-          {/each}
-        </div>
+      {#each Object.entries(moduleService?.prevParaBuffer ?? {}) as [paraIndex, verses] (paraIndex)}
+        <Paragraph {verses} class="bg-green-900 -900" />
+      {/each}
+      <Paragraph verses={moduleService?.activePara ?? []} />
+      {#each Object.entries(moduleService?.nextParaBuffer ?? {}) as [paraIndex, verses] (paraIndex)}
+        <Paragraph {verses} class="bg-blue-900" />
       {/each}
     </div>
     <div class="flex h-[calc(100vh-80px)] justify-center w-10 ml-1">
-      <IndicatorScrollBar
-        bind:value={scrollValue}
-        moduleService={moduleService}
-      />
+      <IndicatorScrollBar bind:value={scrollValue} {moduleService} />
     </div>
   </div>
 </div>

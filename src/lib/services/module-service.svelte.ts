@@ -8,6 +8,7 @@ import type { Book } from '$lib/model/book';
 export type SearchType = 'ref' | 'ref-point' | 'text';
 const defaultSearch = 'GEN 1:1';
 const defaultSearchType: SearchType = 'ref-point';
+const paraBuffer = 2;
 
 function getTestamentChapterSids(
   testamentVerseCounts: TestamentVerseCounts
@@ -29,7 +30,9 @@ export default class ModuleService {
   private getTextStart = $state<number | undefined>();
   public currentSearch = $state<string | undefined>(defaultSearch);
   public currentSearchType = $state<SearchType | undefined>(defaultSearchType);
-  public verses = $state<Verse[]>([]);
+  public prevParaBuffer = $state<Record<number, Verse[]>>({});
+  public activePara = $state<Verse[]>([]);
+  public nextParaBuffer = $state<Record<number, Verse[]>>({});
   public books = $state<Record<string, Book>>({});
 
   constructor(private moduleId: string) {
@@ -51,42 +54,63 @@ export default class ModuleService {
     const start = Date.now();
     this.getTextStart = start;
     if (currentSearchType === 'ref-point') {
-      const currentChapterSid = ModuleService.getChapterSid(currentSearch);
-      const prior = ModuleService.getPriorChapterSids(currentChapterSid, 3);
-      const next = ModuleService.getNextChapterSids(currentChapterSid, 3);
-      const verses = await this.getChapters([
-        ...prior,
-        currentChapterSid,
-        ...next,
-      ]);
+      const paraId = await this.getParagraphIdBySid(currentSearch);
+      const { prev, active, next } = await this.getVersesByParagraphs(paraId);
+
       // Only set results if this is the last call to getText.
       if (this.getTextStart === start) {
-        this.verses = verses;
+        this.prevParaBuffer = prev;
+        this.activePara = active;
+        this.nextParaBuffer = next;
       }
     }
   }
-
-  private async getChapters(chapterSids: string[]): Promise<Verse[]> {
+  private async getParagraphIdBySid(verseSid: string): Promise<number> {
     const db = await this.getDb();
+    const result = await db.select<{ paragraph: number }[]>(
+      'SELECT paragraph FROM verses WHERE sid = $1',
+      [verseSid]
+    );
+    return result?.[0]?.paragraph ?? 0;
+  }
 
-    const placeholders = chapterSids
-      .map((_, index) => `$${index + 1}`)
-      .join(', ');
+  private async getVersesByParagraphs(paraId: number): Promise<{
+    prev: Record<number, Verse[]>;
+    active: Verse[];
+    next: Record<number, Verse[]>;
+  }> {
+    const fromPara = paraId - paraBuffer;
+    const thruPara = paraId + paraBuffer;
 
+    const db = await this.getDb();
     const start = Date.now();
     const verseResults = await db.select<VerseRow[]>(
       `
-      SELECT v.sid, v.paragraph, v.children
-      FROM chapters c JOIN main.verses v ON c.bookId = v.bookId AND c.nbr = v.chapter
-      WHERE c.sid in (${placeholders})`,
-      chapterSids
+          SELECT v.sid, v.paragraph, v.children
+          FROM verses v
+          WHERE v.paragraph BETWEEN $1 AND $2`,
+      [fromPara, thruPara]
     );
-    console.log(`sel ran in ${Date.now() - start}ms.`);
-    return verseResults.map(({ sid, paragraph, children }) => ({
+    console.log(`sel ran in ${Date.now() - start}ms.`); // TODO: remove this
+
+    const mapVerse = ({ sid, paragraph, children }: VerseRow): Verse => ({
       sid,
       paragraph,
       children: JSON.parse(children) as VerseChild[],
-    }));
+    });
+
+    const prev = Object.groupBy(
+      verseResults.filter((v) => v.paragraph < paraId).map(mapVerse),
+      (v) => v.paragraph
+    ) as Record<string, Verse[]>;
+    const active = verseResults
+      .filter((v) => v.paragraph === paraId)
+      .map(mapVerse);
+    const next = Object.groupBy(
+      verseResults.filter((v) => v.paragraph > paraId).map(mapVerse),
+      (v) => v.paragraph
+    ) as Record<string, Verse[]>;
+    return { prev, active, next };
   }
 
   private async getDb(): Promise<Database> {
