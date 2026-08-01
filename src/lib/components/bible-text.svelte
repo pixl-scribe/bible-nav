@@ -43,7 +43,8 @@
     <div
       class="flex flex-col h-[calc(100vh-80px)] w-full overflow-y-auto text-lg leading-relaxed scrollable-region"
     >
-      {scrollValue}
+      {moduleService?.currentSearchType}
+      {moduleService?.currentSearch}
       {#each moduleService?.verses as verse (verse.sid)}
         <div class="flex flex-wrap items-center">
           <div class="flex text-xs text-base-content/60">{verse.sid}</div>
@@ -66,7 +67,7 @@
     <div class="flex h-[calc(100vh-80px)] justify-center w-10 ml-1">
       <IndicatorScrollBar
         bind:value={scrollValue}
-        books={moduleService?.books ?? {}}
+        moduleService={moduleService}
       />
     </div>
   </div>

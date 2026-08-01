@@ -1,15 +1,16 @@
 <script lang="ts">
   import type { BibleVerseCounts } from '$lib/model/bible-verse-counts';
   import rawVerseCounts from '../assets/bible-verse-counts.yaml';
-  import type { Book } from '$lib/model/book';
   import debounce from '$lib/services/debounce';
+  import type ModuleService from '$lib/services/module-service.svelte';
 
   const verseCounts = rawVerseCounts as BibleVerseCounts;
 
   let {
-    value = $bindable(undefined),
-    books,
-  }: { value: number | undefined; books: Record<string, Book> } = $props();
+    value = $bindable(undefined), // represents the scroll position 0(top)..100(bottom)
+    moduleService,
+  }: { value: number | undefined; moduleService: ModuleService | undefined } =
+    $props();
 
   let referenceLabel = $state<string>('');
   const allVerseCounts = { ...verseCounts.OT, ...verseCounts.NT };
@@ -41,10 +42,15 @@
     window.removeEventListener('pointerup', stopDragging);
   }
 
-  const setRefenceDeBounced = debounce(setReference, 10);
+  const setRefenceDeBounced = debounce(setReference, 100);
 
   function setReference(value: number | undefined): void {
-    if (value === undefined) {
+    const books = moduleService?.books;
+    if (
+      value === undefined ||
+      moduleService === undefined ||
+      books === undefined
+    ) {
       referenceLabel = '';
       return;
     }
@@ -60,6 +66,8 @@
           const book = books[foundBookCode];
           const verse = verseIndex - verseAccum + 1;
           referenceLabel = `${book?.toc3} ${foundChapter}:${verse}`;
+          moduleService.currentSearch = `${book?.code} ${foundChapter}:${verse}`;
+          moduleService.currentSearchType = 'ref-point';
           return;
         }
         verseAccum += versesInChapter;

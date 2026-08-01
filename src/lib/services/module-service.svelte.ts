@@ -25,29 +25,25 @@ const allChapterSids = [
 ];
 
 export default class ModuleService {
-  private dbPath: string | undefined;
+  private db: Database | undefined;
   public currentSearch = $state<string | undefined>(defaultSearch);
   public currentSearchType = $state<SearchType | undefined>(defaultSearchType);
   public verses = $state<Verse[]>([]);
   public books = $state<Record<string, Book>>({});
 
   constructor(private moduleId: string) {
+    this.getBooks().then();
     $effect(() => {
       const currentSearch = this.currentSearch ?? defaultSearch;
       const currentSearchType = this.currentSearchType ?? defaultSearchType;
-      this.getBooks().then();
       this.getText(currentSearch, currentSearchType).then();
     });
   }
 
   private async getBooks() {
     const db = await this.getDb();
-    try {
-      const books = await db.select<Book[]>('SELECT * FROM books');
-      this.books = Object.fromEntries(books.map((book) => [book.code, book]));
-    } finally {
-      db?.close();
-    }
+    const books = await db.select<Book[]>('SELECT * FROM books');
+    this.books = Object.fromEntries(books.map((book) => [book.code, book]));
   }
 
   private async getText(currentSearch: string, currentSearchType: SearchType) {
@@ -67,34 +63,37 @@ export default class ModuleService {
   private async getChapters(chapterSids: string[]): Promise<Verse[]> {
     const db = await this.getDb();
 
-    let verses: Verse[];
-    try {
-      const placeholders = chapterSids
-        .map((_, index) => `$${index + 1}`)
-        .join(', ');
+    const placeholders = chapterSids
+      .map((_, index) => `$${index + 1}`)
+      .join(', ');
 
-      const verseResults = await db.select<VerseRow[]>(
-        `
-        SELECT v.sid, v.paragraph, v.children
-        FROM chapters c JOIN main.verses v ON c.bookId = v.bookId AND c.nbr = v.chapter
-        WHERE c.sid in (${placeholders})`,
-        chapterSids
-      );
-      verses = verseResults.map(({ sid, paragraph, children }) => ({
-        sid,
-        paragraph,
-        children: JSON.parse(children) as VerseChild[],
-      }));
-    } finally {
-      db?.close();
-    }
-    return verses;
+    const start = Date.now();
+    const verseResults = await db.select<VerseRow[]>(
+      `
+      SELECT v.sid, v.paragraph, v.children
+      FROM chapters c JOIN main.verses v ON c.bookId = v.bookId AND c.nbr = v.chapter
+      WHERE c.sid in (${placeholders})`,
+      chapterSids
+    );
+    console.log(`sel ran in ${Date.now() - start}ms.`);
+    return verseResults.map(({ sid, paragraph, children }) => ({
+      sid,
+      paragraph,
+      children: JSON.parse(children) as VerseChild[],
+    }));
   }
 
   private async getDb(): Promise<Database> {
+    if (this.db !== undefined) {
+      return this.db;
+    }
     const dbPath = await this.getDbPath();
     try {
-      return await Database.load(dbPath);
+      this.db = await Database.load(dbPath);
+      await this.db.execute('PRAGMA query_only = 1');
+      await this.db.execute('PRAGMA journal_mode = OFF');
+      await this.db.execute('PRAGMA synchronous = OFF');
+      return this.db;
     } catch (err) {
       console.error(`Error connecting to ${dbPath}`, err);
       throw err;
@@ -102,10 +101,8 @@ export default class ModuleService {
   }
 
   private async getDbPath(): Promise<string> {
-    if (this.dbPath) return this.dbPath;
     const appData = await appDataDir();
-    this.dbPath = `sqlite:${appData}/modules/${this.moduleId}.db`;
-    return this.dbPath;
+    return `sqlite:${appData}/modules/${this.moduleId}.db?immutable=1&mode=ro`;
   }
 
   /**
