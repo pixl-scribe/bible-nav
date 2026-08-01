@@ -6,7 +6,7 @@ import type { Book } from '$lib/model/book';
 export type SearchType = 'ref' | 'ref-point' | 'text';
 const defaultSearch = 'GEN 1:1';
 const defaultSearchType: SearchType = 'ref-point';
-const paraBuffer = 2;
+const paraBuffer = 5;
 
 export default class ModuleService {
   private db: Database | undefined;
