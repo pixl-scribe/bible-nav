@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Columns2, Search, Plus } from '@lucide/svelte';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { _ } from 'svelte-i18n';
-  import ModuleService from '$lib/services/module-service.svelte';
+  import ModuleService, {paraBuffer} from '$lib/services/module-service.svelte';
   import IndicatorScrollBar from './indicator-scroll-bar.svelte';
   import Paragraph from './paragraph.svelte';
 
@@ -10,21 +10,77 @@
 
   let moduleService = $state<ModuleService | undefined>();
   let scrollValue = $state<number | undefined>(undefined);
+  let activeStatus = $state<'visible' | 'above' | 'below'>('visible');
+  let scrollableElement: HTMLElement | undefined = $state();
+  let prevParaElements = $state<HTMLDivElement[]>([]);
+  let activeParaElement: HTMLElement | undefined = $state();
+  let nextParaElements = $state<HTMLDivElement[]>([]);
 
-  onMount(async () => {
+  function updatePosition() {
+    if (moduleService?.selectInProgress ?? true) return;
+    if (!activeParaElement || !scrollableElement) return;
+    const rect = activeParaElement.getBoundingClientRect();
+    const scrollableArea = scrollableElement.getBoundingClientRect();
+    if (rect.bottom < scrollableArea.top) {
+      activeStatus = 'above';
+    } else if (rect.top > scrollableArea.bottom) {
+      activeStatus = 'below';
+    } else {
+      activeStatus = 'visible';
+    }
+  }
+
+  onMount(() => {
     moduleService = new ModuleService(moduleId);
+
+    scrollableElement?.addEventListener('scroll', updatePosition);
+    updatePosition();
+    return () => {
+      scrollableElement?.removeEventListener('scroll', updatePosition);
+    };
   });
 
+  /**
+   * Setting the scroll to the top after books load.
+   */
   $effect(() => {
     // Need to wait for books to be read before setting the scroll value.
     if (moduleService?.books && Object.keys(moduleService?.books).length > 0) {
-      scrollValue = 0;
+      scrollValue = 0; // This sets the reference to GEN 1:1
+    }
+  });
+
+  $effect(() => {
+    if (activeStatus === 'above') {
+      untrack(() => {
+        const toBeRemovesParaHt =
+          prevParaElements.length >= paraBuffer
+            ? prevParaElements[0].getBoundingClientRect().height
+            : 0;
+        moduleService?.moveActiveDownOnePara().then(() => {
+          if (scrollableElement && toBeRemovesParaHt > 0) {
+            scrollableElement.scrollTop -= toBeRemovesParaHt;
+          }
+        });
+      });
+    } else if (activeStatus === 'below') {
+      untrack(() => {
+        moduleService?.moveActiveUpOnePara().then(() => {
+          const newParaHt =
+            prevParaElements.length >= paraBuffer
+              ? prevParaElements[0].getBoundingClientRect().height
+              : 0;
+          if (scrollableElement) {
+            scrollableElement.scrollTop += newParaHt;
+          }
+        });
+      });
     }
   });
 </script>
 
 <div
-  class="flex flex-col bg-base-200 rounded-box rounded-xl w-full flex-1 max-w-140 ml-1 h-full items-start"
+  class="flex flex-col bg-base-200 rounded-xl w-full flex-1 max-w-140 ml-1 h-full items-start"
 >
   <div class="flex w-full p-2 border-b border-base-content/10">
     <label class="input w-full">
@@ -43,15 +99,20 @@
   <div class="flex h-[calc(100vh-66px)] w-full pt-2 pl-2 pb-2">
     <div
       class="flex flex-col h-[calc(100vh-80px)] w-full overflow-y-auto text-lg leading-relaxed scrollable-region"
+      bind:this={scrollableElement}
     >
-      {moduleService?.currentSearchType}
-      {moduleService?.currentSearch}
-      {#each Object.entries(moduleService?.prevParaBuffer ?? {}) as [paraIndex, verses] (paraIndex)}
-        <Paragraph {verses} {moduleService} class="bg-green-950" />
+      {#each Object.entries(moduleService?.prevParaBuffer ?? {}) as [paraIndex, verses], i (paraIndex)}
+        <div bind:this={prevParaElements[i]}>
+          <Paragraph {verses} {moduleService} class="bg-accent/10" />
+        </div>
       {/each}
-      <Paragraph verses={moduleService?.activePara ?? []} {moduleService} />
-      {#each Object.entries(moduleService?.nextParaBuffer ?? {}) as [paraIndex, verses] (paraIndex)}
-        <Paragraph {verses} {moduleService} class="bg-blue-950" />
+      <div bind:this={activeParaElement}>
+        <Paragraph verses={moduleService?.activePara ?? []} {moduleService} />
+      </div>
+      {#each Object.entries(moduleService?.nextParaBuffer ?? {}) as [paraIndex, verses], i (paraIndex)}
+        <div bind:this={nextParaElements[i]}>
+          <Paragraph {verses} {moduleService} class="bg-primary/10" />
+        </div>
       {/each}
     </div>
     <div class="flex h-[calc(100vh-80px)] justify-center w-10 ml-1">

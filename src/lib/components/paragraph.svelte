@@ -2,6 +2,7 @@
   /* eslint-disable svelte/no-useless-mustaches */
   import type { Verse } from '$lib/model/verse';
   import type ModuleService from '$lib/services/module-service.svelte';
+  import { untrack } from 'svelte';
 
   let {
     verses,
@@ -15,13 +16,20 @@
 
   const isTextRegex = /^[a-zA-Z]/;
 
+  /**
+   * Scroll to verse reference when scrollToSid changes.
+   */
   $effect(() => {
     if (moduleService && moduleService?.scrollToSid) {
-      const el = document.getElementById(moduleService.scrollToSid);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-      moduleService.scrollToSid = undefined;
+      const scrollId = moduleService.scrollToSid;
+      untrack(() => {
+        const el = document.getElementById(scrollId);
+        if (el) {
+          console.log(`Scrolling to ${scrollId}...`);
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        moduleService.scrollToSid = undefined;
+      });
     }
   });
 </script>

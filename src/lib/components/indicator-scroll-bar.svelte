@@ -76,6 +76,9 @@
     referenceLabel = '';
   }
 
+  /**
+   * Watches scroll value and reloads text when it changes.
+   */
   $effect(() => {
     setRefenceDeBounced(value);
   });

@@ -2,11 +2,12 @@ import Database from '@tauri-apps/plugin-sql'; // requires svelte service
 import { appDataDir } from '@tauri-apps/api/path';
 import type { Verse, VerseChild, VerseRow } from '$lib/model/verse';
 import type { Book } from '$lib/model/book';
+import { untrack } from 'svelte';
 
 export type SearchType = 'ref' | 'ref-point' | 'text';
 const defaultSearch = 'GEN 1:1';
 const defaultSearchType: SearchType = 'ref-point';
-const paraBuffer = 5;
+export const paraBuffer = 5;
 
 export default class ModuleService {
   private db: Database | undefined;
@@ -18,13 +19,25 @@ export default class ModuleService {
   public nextParaBuffer = $state<Record<number, Verse[]>>({});
   public books = $state<Record<string, Book>>({});
   public scrollToSid = $state<string | undefined>();
+  public selectInProgress = $state<boolean>(true);
 
   constructor(private moduleId: string) {
     this.getBooks().then();
+
+    // Watch search and search type.
     $effect(() => {
       const currentSearch = this.currentSearch ?? defaultSearch;
       const currentSearchType = this.currentSearchType ?? defaultSearchType;
-      this.getText(currentSearch, currentSearchType).then();
+      console.log(currentSearch);
+      untrack(() => {
+        this.selectInProgress = true;
+        this.getText(currentSearch, currentSearchType).then(() => {
+          // Need to wait for scrolling to finish.
+          setTimeout(() => {
+            this.selectInProgress = false;
+          }, 1000);
+        });
+      });
     });
   }
 
@@ -37,6 +50,36 @@ export default class ModuleService {
     const book = this.books[bookId];
     if (!book) return '';
     return `${book.toc2} ${verseRef}`;
+  }
+
+  public async moveActiveDownOnePara(): Promise<void> {
+    const keys = Object.keys(this.nextParaBuffer);
+    if (keys.length === 0) return;
+
+    this.selectInProgress = true;
+    const nextParaNumber = parseInt(keys[0]);
+    const { prev, active, next } =
+      await this.getVersesByParagraphs(nextParaNumber);
+
+    this.prevParaBuffer = prev;
+    this.activePara = active;
+    this.nextParaBuffer = next;
+    this.selectInProgress = false;
+  }
+
+  public async moveActiveUpOnePara(): Promise<void> {
+    const keys = Object.keys(this.prevParaBuffer);
+    if (keys.length === 0) return;
+
+    this.selectInProgress = true;
+    const prevParaNumber = parseInt(keys[keys.length - 1]);
+    const { prev, active, next } =
+      await this.getVersesByParagraphs(prevParaNumber);
+
+    this.prevParaBuffer = prev;
+    this.activePara = active;
+    this.nextParaBuffer = next;
+    this.selectInProgress = false;
   }
 
   private async getBooks() {
@@ -57,7 +100,7 @@ export default class ModuleService {
         this.prevParaBuffer = prev;
         this.activePara = active;
         this.nextParaBuffer = next;
-        this.scrollToSid = currentSearch;
+        this.scrollToSid = currentSearch; // Triggers scrollIntoView in paragraph.svelte
       }
     }
   }
