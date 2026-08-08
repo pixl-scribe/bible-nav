@@ -1,24 +1,31 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Used to scale down high volume calls such as on key up or on scroll functions.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default function debounce<T extends (...args: any[]) => void>(
-  callback: T,
+export default function debounce<T extends (...args: any[]) => any>(
+  func: T,
   wait: number
-): (...args: Parameters<T>) => void {
+): (
+  ...args: Parameters<T>
+) => ReturnType<T> extends Promise<any>
+  ? Promise<Awaited<ReturnType<T>>>
+  : ReturnType<T> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return function (this: any, ...args: Parameters<T>): void {
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    const context = this;
-
-    if (timeoutId !== null) {
+  return function (this: any, ...args: Parameters<T>) {
+    if (timeoutId) {
       clearTimeout(timeoutId);
     }
 
-    timeoutId = setTimeout(() => {
-      callback.apply(context, args);
-    }, wait);
+    return new Promise((resolve, reject) => {
+      timeoutId = setTimeout(() => {
+        try {
+          const result = func.apply(this, args);
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        }
+      }, wait);
+    }) as any;
   };
 }

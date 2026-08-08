@@ -3,11 +3,12 @@ import { appDataDir } from '@tauri-apps/api/path';
 import type { Verse, VerseChild, VerseRow } from '$lib/model/verse';
 import type { Book } from '$lib/model/book';
 import { untrack } from 'svelte';
+import debounce from '$lib/services/debounce';
 
 export type SearchType = 'ref' | 'ref-point' | 'text';
 const defaultSearch = 'GEN 1:1';
 const defaultSearchType: SearchType = 'ref-point';
-export const paraBuffer = 5;
+export const paraBuffer = 20;
 
 export default class ModuleService {
   private db: Database | undefined;
@@ -21,6 +22,8 @@ export default class ModuleService {
   public scrollToSid = $state<string | undefined>();
   public selectInProgress = $state<boolean>(true);
 
+  private getTextDebounced = debounce(this.getText, 100);
+
   constructor(private moduleId: string) {
     this.getBooks().then();
 
@@ -31,7 +34,7 @@ export default class ModuleService {
       console.log(currentSearch);
       untrack(() => {
         this.selectInProgress = true;
-        this.getText(currentSearch, currentSearchType).then(() => {
+        this.getTextDebounced(currentSearch, currentSearchType).then(() => {
           // Need to wait for scrolling to finish.
           setTimeout(() => {
             this.selectInProgress = false;
@@ -88,7 +91,10 @@ export default class ModuleService {
     this.books = Object.fromEntries(books.map((book) => [book.code, book]));
   }
 
-  private async getText(currentSearch: string, currentSearchType: SearchType) {
+  private async getText(
+    currentSearch: string,
+    currentSearchType: SearchType
+  ): Promise<void> {
     const start = Date.now();
     this.getTextStart = start;
     if (currentSearchType === 'ref-point') {

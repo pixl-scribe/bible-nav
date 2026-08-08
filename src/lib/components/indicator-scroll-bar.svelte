@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { BibleVerseCounts } from '$lib/model/bible-verse-counts';
   import rawVerseCounts from '../assets/bible-verse-counts.yaml';
-  import debounce from '$lib/services/debounce';
   import type ModuleService from '$lib/services/module-service.svelte';
+  import { untrack } from 'svelte';
 
   const verseCounts = rawVerseCounts as BibleVerseCounts;
 
@@ -42,8 +42,6 @@
     window.removeEventListener('pointerup', stopDragging);
   }
 
-  const setRefenceDeBounced = debounce(setReference, 100);
-
   function setReference(value: number | undefined): void {
     const books = moduleService?.books;
     if (
@@ -80,7 +78,10 @@
    * Watches scroll value and reloads text when it changes.
    */
   $effect(() => {
-    setRefenceDeBounced(value);
+    const newScrollValue = value;
+    untrack(() => {
+      setReference(newScrollValue);
+    });
   });
 </script>
 

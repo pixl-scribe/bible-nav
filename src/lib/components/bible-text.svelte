@@ -55,12 +55,13 @@
       untrack(() => {
         const toBeRemovesParaHt =
           prevParaElements.length >= paraBuffer
-            ? prevParaElements[0].getBoundingClientRect().height
+            ? prevParaElements?.[0]?.getBoundingClientRect()?.height
             : 0;
         moduleService?.moveActiveDownOnePara().then(() => {
           if (scrollableElement && toBeRemovesParaHt > 0) {
             scrollableElement.scrollTop -= toBeRemovesParaHt;
           }
+          activeStatus = 'visible';
         });
       });
     } else if (activeStatus === 'below') {
@@ -68,11 +69,12 @@
         moduleService?.moveActiveUpOnePara().then(() => {
           const newParaHt =
             prevParaElements.length >= paraBuffer
-              ? prevParaElements[0].getBoundingClientRect().height
+              ? prevParaElements?.[0]?.getBoundingClientRect()?.height
               : 0;
           if (scrollableElement) {
             scrollableElement.scrollTop += newParaHt;
           }
+          activeStatus = 'visible';
         });
       });
     }
