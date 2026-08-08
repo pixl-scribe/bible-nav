@@ -13,6 +13,8 @@ export const paraBuffer = 20;
 export default class ModuleService {
   private db: Database | undefined;
   private getTextStart = $state<number | undefined>();
+  private getTextDebounced = debounce(this.getText, 100);
+
   public currentSearch = $state<string | undefined>(defaultSearch);
   public currentSearchType = $state<SearchType | undefined>(defaultSearchType);
   public prevParaBuffer = $state<Record<number, Verse[]>>({});
@@ -21,8 +23,7 @@ export default class ModuleService {
   public books = $state<Record<string, Book>>({});
   public scrollToSid = $state<string | undefined>();
   public selectInProgress = $state<boolean>(true);
-
-  private getTextDebounced = debounce(this.getText, 100);
+  public scrollPct = $state<number | undefined>(undefined);
 
   constructor(private moduleId: string) {
     this.getBooks().then();
@@ -31,7 +32,6 @@ export default class ModuleService {
     $effect(() => {
       const currentSearch = this.currentSearch ?? defaultSearch;
       const currentSearchType = this.currentSearchType ?? defaultSearchType;
-      console.log(currentSearch);
       untrack(() => {
         this.selectInProgress = true;
         this.getTextDebounced(currentSearch, currentSearchType).then(() => {
@@ -41,6 +41,16 @@ export default class ModuleService {
           }, 1000);
         });
       });
+    });
+
+    /**
+     * Setting the scroll to the top after books load.
+     */
+    $effect(() => {
+      // Need to wait for books to be read before setting the scroll value.
+      if (this.books && Object.keys(this.books).length > 0) {
+        this.scrollPct = 0; // This sets the reference to GEN 1:1
+      }
     });
   }
 

@@ -6,10 +6,7 @@
 
   const verseCounts = rawVerseCounts as BibleVerseCounts;
 
-  let {
-    value = $bindable(undefined), // represents the scroll position 0(top)..100(bottom)
-    moduleService,
-  }: { value: number | undefined; moduleService: ModuleService | undefined } =
+  let { moduleService }: { moduleService: ModuleService | undefined } =
     $props();
 
   let referenceLabel = $state<string>('');
@@ -34,7 +31,9 @@
     let pct = ((e.clientY - rect.top) / rect.height) * 100;
     if (pct < 0) pct = 0;
     if (pct > 100) pct = 100;
-    value = pct;
+    if (moduleService) {
+      moduleService.scrollPct = pct;
+    }
   }
 
   function stopDragging() {
@@ -42,17 +41,17 @@
     window.removeEventListener('pointerup', stopDragging);
   }
 
-  function setReference(value: number | undefined): void {
+  function setReference(newScrollValue: number | undefined): void {
     const books = moduleService?.books;
     if (
-      value === undefined ||
+      newScrollValue === undefined ||
       moduleService === undefined ||
       books === undefined
     ) {
       referenceLabel = '';
       return;
     }
-    const verseIndex = Math.round((value / 100) * (verseCount - 1));
+    const verseIndex = Math.round((newScrollValue / 100) * (verseCount - 1));
     let foundBookCode: string;
     let verseAccum = 0;
     for (const bookCode of Object.keys(allVerseCounts)) {
@@ -78,7 +77,7 @@
    * Watches scroll value and reloads text when it changes.
    */
   $effect(() => {
-    const newScrollValue = value;
+    const newScrollValue = moduleService?.scrollPct;
     untrack(() => {
       setReference(newScrollValue);
     });
@@ -91,7 +90,7 @@
     class="slider-track bg-base-content/10 relative w-2 rounded h-full cursor-pointer"
     onpointerdown={handlePointerDown}
     role="slider"
-    aria-valuenow={value}
+    aria-valuenow={moduleService?.scrollPct}
     aria-valuemin={0}
     aria-valuemax={100}
     tabindex="0"
@@ -99,7 +98,7 @@
     <div
       class="slider-thumb flex justify-center align-items-center absolute h-6 left-1/2 tooltip tooltip-primary z-10"
       data-tip={referenceLabel}
-      style="top: {value}%"
+      style="top: {moduleService?.scrollPct}%"
     >
       <div
         class="bg-primary mask mask-hexagon-2 w-8 h-6 absolute top-0 left-0"

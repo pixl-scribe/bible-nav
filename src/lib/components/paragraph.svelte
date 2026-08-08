@@ -25,7 +25,6 @@
       untrack(() => {
         const el = document.getElementById(scrollId);
         if (el) {
-          console.log(`Scrolling to ${scrollId}...`);
           el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
         moduleService.scrollToSid = undefined;

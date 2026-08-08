@@ -2,14 +2,15 @@
   import { Columns2, Search, Plus } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
   import { _ } from 'svelte-i18n';
-  import ModuleService, {paraBuffer} from '$lib/services/module-service.svelte';
+  import ModuleService, {
+    paraBuffer,
+  } from '$lib/services/module-service.svelte';
   import IndicatorScrollBar from './indicator-scroll-bar.svelte';
   import Paragraph from './paragraph.svelte';
 
   let { moduleId }: { moduleId: string } = $props();
 
   let moduleService = $state<ModuleService | undefined>();
-  let scrollValue = $state<number | undefined>(undefined);
   let activeStatus = $state<'visible' | 'above' | 'below'>('visible');
   let scrollableElement: HTMLElement | undefined = $state();
   let prevParaElements = $state<HTMLDivElement[]>([]);
@@ -38,16 +39,6 @@
     return () => {
       scrollableElement?.removeEventListener('scroll', updatePosition);
     };
-  });
-
-  /**
-   * Setting the scroll to the top after books load.
-   */
-  $effect(() => {
-    // Need to wait for books to be read before setting the scroll value.
-    if (moduleService?.books && Object.keys(moduleService?.books).length > 0) {
-      scrollValue = 0; // This sets the reference to GEN 1:1
-    }
   });
 
   $effect(() => {
@@ -118,7 +109,7 @@
       {/each}
     </div>
     <div class="flex h-[calc(100vh-80px)] justify-center w-10 ml-1">
-      <IndicatorScrollBar bind:value={scrollValue} {moduleService} />
+      <IndicatorScrollBar {moduleService} />
     </div>
   </div>
 </div>
