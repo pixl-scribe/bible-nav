@@ -33,6 +33,7 @@ export default class ModuleService {
   public scrollToSid = $state<string | undefined>();
   public selectInProgress = $state<boolean>(true);
   public scrollPct = $state<number | undefined>(undefined);
+  public adjustingScrollPct = $state<boolean>(false);
   public moduleName = $state<string>('');
   public referenceLabel = $state<string>('');
 
@@ -77,10 +78,21 @@ export default class ModuleService {
     return `${book.toc2} ${verseRef}`;
   }
 
+  private formatAbbreviatedRefFromSid(sid: string) {
+    const [bookId, verseRef] = sid.split(' ');
+    if (!bookId || !verseRef) return '';
+    const book = this.books[bookId];
+    if (!book) return '';
+    return `${book.toc3} ${verseRef}`;
+  }
+
   /**
    * Called when the scrollbar changes position.
    */
   public setReference(newScrollValue: number | undefined): void {
+    if (this.adjustingScrollPct) {
+      return;
+    }
     const books = this.books;
     if (newScrollValue === undefined || books === undefined) {
       this.referenceLabel = '';
@@ -120,6 +132,10 @@ export default class ModuleService {
     this.prevParaBuffer = prev;
     this.activePara = active;
     this.nextParaBuffer = next;
+    const firstVerse = active?.[0];
+    if (firstVerse) {
+      this.setScrollPositionFromMouseScrolling(firstVerse);
+    }
     this.selectInProgress = false;
   }
 
@@ -135,7 +151,20 @@ export default class ModuleService {
     this.prevParaBuffer = prev;
     this.activePara = active;
     this.nextParaBuffer = next;
+    const firstVerse = active?.[0];
+    if (firstVerse) {
+      this.setScrollPositionFromMouseScrolling(firstVerse);
+    }
     this.selectInProgress = false;
+  }
+
+  private setScrollPositionFromMouseScrolling(verse: Verse): void {
+    this.adjustingScrollPct = true;
+    this.scrollPct = (verse.id / verseCount) * 100;
+    this.referenceLabel = this.formatAbbreviatedRefFromSid(verse.sid);
+    setTimeout(() => {
+      this.adjustingScrollPct = false;
+    }, 500);
   }
 
   private async getModule() {
@@ -192,14 +221,21 @@ export default class ModuleService {
     const start = Date.now();
     const verseResults = await db.select<VerseRow[]>(
       `
-          SELECT v.sid, v.nbr, v.paragraph, v.children
+          SELECT v.id, v.sid, v.nbr, v.paragraph, v.children
           FROM verses v
           WHERE v.paragraph BETWEEN $1 AND $2`,
       [fromPara, thruPara]
     );
     console.log(`sel ran in ${Date.now() - start}ms.`); // TODO: remove this
 
-    const mapVerse = ({ sid, nbr, paragraph, children }: VerseRow): Verse => ({
+    const mapVerse = ({
+      id,
+      sid,
+      nbr,
+      paragraph,
+      children,
+    }: VerseRow): Verse => ({
+      id,
       sid,
       nbr,
       paragraph,
