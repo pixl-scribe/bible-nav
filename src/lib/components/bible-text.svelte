@@ -75,23 +75,28 @@
 <div
   class="flex flex-col bg-base-200 rounded-xl w-full flex-1 max-w-140 ml-1 h-full items-start"
 >
-  <div class="flex w-full p-2 border-b border-base-content/10">
+  <div class="flex w-full p-2">
     <label class="input w-full">
       <Search />
       <input type="search" required placeholder={$_('bible-text.search')} />
     </label>
-    <div class="divider divider-horizontal mx-1"></div>
     <button
-      class="btn btn-soft btn-primary px-1 tooltip tooltip-bottom"
+      class="btn btn-soft btn-primary px-1 ml-2 tooltip tooltip-bottom"
       data-tip={$_('bible-text.add-parallel')}
     >
       <Plus size={16} />
       <Columns2 />
     </button>
   </div>
-  <div class="flex h-[calc(100vh-66px)] w-full pt-2 pl-2 pb-2">
+  <div
+    class="flex justify-between text-xs text-base-content/60 w-full px-2 pb-2 border-b border-base-content/10"
+  >
+    <div>{moduleService?.moduleName}</div>
+    <div>{moduleService?.referenceLabel}</div>
+  </div>
+  <div class="flex w-full pt-2 pl-2 pb-2">
     <div
-      class="flex flex-col h-[calc(100vh-80px)] w-full overflow-y-auto text-lg leading-relaxed scrollable-region"
+      class="flex flex-col h-[calc(100vh-104px)] w-full overflow-y-auto text-lg leading-relaxed scrollable-region"
       bind:this={scrollableElement}
     >
       {#each Object.entries(moduleService?.prevParaBuffer ?? {}) as [paraIndex, verses], i (paraIndex)}
@@ -108,7 +113,7 @@
         </div>
       {/each}
     </div>
-    <div class="flex h-[calc(100vh-80px)] justify-center w-10 ml-1">
+    <div class="flex h-[calc(100vh-104px)] justify-center w-10 ml-1">
       <IndicatorScrollBar {moduleService} />
     </div>
   </div>

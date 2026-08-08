@@ -1,22 +1,10 @@
 <script lang="ts">
-  import type { BibleVerseCounts } from '$lib/model/bible-verse-counts';
-  import rawVerseCounts from '../assets/bible-verse-counts.yaml';
   import type ModuleService from '$lib/services/module-service.svelte';
   import { untrack } from 'svelte';
-
-  const verseCounts = rawVerseCounts as BibleVerseCounts;
 
   let { moduleService }: { moduleService: ModuleService | undefined } =
     $props();
 
-  let referenceLabel = $state<string>('');
-  const allVerseCounts = { ...verseCounts.OT, ...verseCounts.NT };
-  const verseCount = Object.values(allVerseCounts).reduce(
-    (acc, curr) => acc + curr.reduce((acc2, curr2) => acc2 + curr2, 0),
-    0
-  ); // 31,102 verses
-
-  //const totalVersesInBible = Object.values(books).reduce((c) );
   let trackEl = $state<HTMLDivElement>();
 
   function handlePointerDown(e: PointerEvent) {
@@ -41,45 +29,13 @@
     window.removeEventListener('pointerup', stopDragging);
   }
 
-  function setReference(newScrollValue: number | undefined): void {
-    const books = moduleService?.books;
-    if (
-      newScrollValue === undefined ||
-      moduleService === undefined ||
-      books === undefined
-    ) {
-      referenceLabel = '';
-      return;
-    }
-    const verseIndex = Math.round((newScrollValue / 100) * (verseCount - 1));
-    let foundBookCode: string;
-    let verseAccum = 0;
-    for (const bookCode of Object.keys(allVerseCounts)) {
-      foundBookCode = bookCode;
-      const chapterCounts = allVerseCounts[bookCode];
-      for (const [index, versesInChapter] of chapterCounts.entries()) {
-        const foundChapter = index + 1;
-        if (verseAccum + versesInChapter > verseIndex) {
-          const book = books[foundBookCode];
-          const verse = verseIndex - verseAccum + 1;
-          referenceLabel = `${book?.toc3} ${foundChapter}:${verse}`;
-          moduleService.currentSearch = `${book?.code} ${foundChapter}:${verse}`;
-          moduleService.currentSearchType = 'ref-point';
-          return;
-        }
-        verseAccum += versesInChapter;
-      }
-    }
-    referenceLabel = '';
-  }
-
   /**
    * Watches scroll value and reloads text when it changes.
    */
   $effect(() => {
     const newScrollValue = moduleService?.scrollPct;
     untrack(() => {
-      setReference(newScrollValue);
+      moduleService?.setReference(newScrollValue);
     });
   });
 </script>
@@ -97,7 +53,7 @@
   >
     <div
       class="slider-thumb flex justify-center align-items-center absolute h-6 left-1/2 tooltip tooltip-primary z-10"
-      data-tip={referenceLabel}
+      data-tip={moduleService?.referenceLabel}
       style="top: {moduleService?.scrollPct}%"
     >
       <div

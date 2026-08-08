@@ -4,11 +4,20 @@ import type { Verse, VerseChild, VerseRow } from '$lib/model/verse';
 import type { Book } from '$lib/model/book';
 import { untrack } from 'svelte';
 import debounce from '$lib/services/debounce';
+import rawVerseCounts from '$lib/assets/bible-verse-counts.yaml';
+import type { BibleVerseCounts } from '$lib/model/bible-verse-counts';
 
 export type SearchType = 'ref' | 'ref-point' | 'text';
 const defaultSearch = 'GEN 1:1';
 const defaultSearchType: SearchType = 'ref-point';
 export const paraBuffer = 20;
+
+const verseCounts = rawVerseCounts as BibleVerseCounts;
+const allVerseCounts = { ...verseCounts.OT, ...verseCounts.NT };
+const verseCount = Object.values(allVerseCounts).reduce(
+  (acc, curr) => acc + curr.reduce((acc2, curr2) => acc2 + curr2, 0),
+  0
+); // 31,102 verses
 
 export default class ModuleService {
   private db: Database | undefined;
@@ -24,8 +33,11 @@ export default class ModuleService {
   public scrollToSid = $state<string | undefined>();
   public selectInProgress = $state<boolean>(true);
   public scrollPct = $state<number | undefined>(undefined);
+  public moduleName = $state<string>('');
+  public referenceLabel = $state<string>('');
 
   constructor(private moduleId: string) {
+    this.getModule().then();
     this.getBooks().then();
 
     // Watch search and search type.
@@ -65,6 +77,37 @@ export default class ModuleService {
     return `${book.toc2} ${verseRef}`;
   }
 
+  /**
+   * Called when the scrollbar changes position.
+   */
+  public setReference(newScrollValue: number | undefined): void {
+    const books = this.books;
+    if (newScrollValue === undefined || books === undefined) {
+      this.referenceLabel = '';
+      return;
+    }
+    const verseIndex = Math.round((newScrollValue / 100) * (verseCount - 1));
+    let foundBookCode: string;
+    let verseAccum = 0;
+    for (const bookCode of Object.keys(allVerseCounts)) {
+      foundBookCode = bookCode;
+      const chapterCounts = allVerseCounts[bookCode];
+      for (const [index, versesInChapter] of chapterCounts.entries()) {
+        const foundChapter = index + 1;
+        if (verseAccum + versesInChapter > verseIndex) {
+          const book = books[foundBookCode];
+          const verse = verseIndex - verseAccum + 1;
+          this.referenceLabel = `${book?.toc3} ${foundChapter}:${verse}`;
+          this.currentSearch = `${book?.code} ${foundChapter}:${verse}`;
+          this.currentSearchType = 'ref-point';
+          return;
+        }
+        verseAccum += versesInChapter;
+      }
+    }
+    this.referenceLabel = '';
+  }
+
   public async moveActiveDownOnePara(): Promise<void> {
     const keys = Object.keys(this.nextParaBuffer);
     if (keys.length === 0) return;
@@ -93,6 +136,14 @@ export default class ModuleService {
     this.activePara = active;
     this.nextParaBuffer = next;
     this.selectInProgress = false;
+  }
+
+  private async getModule() {
+    const db = await this.getDb();
+    const moduleRows = await db.select<{ name: string }[]>(
+      'SELECT name FROM module'
+    );
+    this.moduleName = moduleRows?.[0]?.name ?? '';
   }
 
   private async getBooks() {
