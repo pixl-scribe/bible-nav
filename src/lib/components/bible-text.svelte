@@ -121,7 +121,7 @@
       {#if moduleService?.groupingMode === 'paragraph'}
         {#each Object.entries(moduleService?.prevParaBuffer ?? {}) as [paraIndex, verses], i (paraIndex)}
           <div bind:this={prevElements[i]}>
-            <Paragraph {verses} {moduleService} class="bg-accent/10" />
+            <Paragraph {verses} {moduleService} />
           </div>
         {/each}
         <div bind:this={activeElement}>
@@ -129,13 +129,13 @@
         </div>
         {#each Object.entries(moduleService?.nextParaBuffer ?? {}) as [paraIndex, verses], i (paraIndex)}
           <div bind:this={nextElements[i]}>
-            <Paragraph {verses} {moduleService} class="bg-primary/10" />
+            <Paragraph {verses} {moduleService} />
           </div>
         {/each}
       {:else}
         {#each moduleService?.prevVerseBuffer ?? [] as verse, i (verse.id)}
           <div bind:this={prevElements[i]}>
-            <Verse {verse} {moduleService} class="bg-accent/10" />
+            <Verse {verse} {moduleService} />
           </div>
         {/each}
         {#if moduleService?.activeVerse !== undefined}
@@ -145,7 +145,7 @@
         {/if}
         {#each moduleService?.nextVerseBuffer ?? [] as verse, i (verse.id)}
           <div bind:this={nextElements[i]}>
-            <Verse {verse} {moduleService} class="bg-primary/10" />
+            <Verse {verse} {moduleService} />
           </div>
         {/each}
       {/if}

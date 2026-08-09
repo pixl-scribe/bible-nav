@@ -14,7 +14,7 @@
   } = $props();
 </script>
 
-<p class="{className} my-2">
+<p class="{className} my-1">
   <span class="text-xs text-base-content/60" id={verse.sid}
     >{moduleService?.formatRefFromSid(verse.sid)}</span
   >
