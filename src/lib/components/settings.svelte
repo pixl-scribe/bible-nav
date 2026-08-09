@@ -8,6 +8,7 @@
     appSettingsService,
   } from '$lib/services/app-settings-service.svelte.js';
   import { onMount } from 'svelte';
+  import type { GroupingMode } from '$lib/services/module-service.svelte';
 
   let appSettings = $state<AppSettings | undefined>(undefined);
 
@@ -23,6 +24,15 @@
   ) {
     const locale = event.currentTarget.value;
     await I18nService.setLocale(locale);
+  }
+
+  async function setGroupBy(
+    event: Event & { currentTarget: HTMLSelectElement }
+  ) {
+    if (appSettings) {
+      appSettings.groupingMode = event.currentTarget.value as GroupingMode;
+      await appSettingsService.saveSettings(appSettings);
+    }
   }
 
   onMount(async () => {
@@ -71,6 +81,20 @@
     <select class="select" onchange={setLocale}>
       {@render languageOption('en-US')}
       {@render languageOption('en-XA')}
+    </select>
+  </fieldset>
+
+  <fieldset class="fieldset">
+    <legend class="fieldset-legend">{$_('settings.groupBy')}</legend>
+    <select class="select" onchange={setGroupBy}>
+      <option
+        value="paragraph"
+        selected={appSettings?.groupingMode === 'paragraph'}
+        >{$_(`settings.groupBy.paragraph`)}</option
+      >
+      <option value="verse" selected={appSettings?.groupingMode === 'verse'}
+        >{$_(`settings.groupBy.verse`)}</option
+      >
     </select>
   </fieldset>
 </div>

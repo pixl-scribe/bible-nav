@@ -6,11 +6,15 @@ import { untrack } from 'svelte';
 import debounce from '$lib/services/debounce';
 import rawVerseCounts from '$lib/assets/bible-verse-counts.yaml';
 import type { BibleVerseCounts } from '$lib/model/bible-verse-counts';
+import { appSettingsService } from './app-settings-service.svelte';
 
 export type SearchType = 'ref' | 'ref-point' | 'text';
+export type GroupingMode = 'verse' | 'paragraph';
 const defaultSearch = 'GEN 1:1';
 const defaultSearchType: SearchType = 'ref-point';
-export const paraBuffer = 20;
+const defaultGroupingMode: GroupingMode = 'paragraph';
+const paraBuffer = 20;
+const verseBuffer = 40;
 
 const verseCounts = rawVerseCounts as BibleVerseCounts;
 const allVerseCounts = { ...verseCounts.OT, ...verseCounts.NT };
@@ -19,16 +23,28 @@ const verseCount = Object.values(allVerseCounts).reduce(
   0
 ); // 31,102 verses
 
+const mapVerse = ({ id, sid, nbr, paragraph, children }: VerseRow): Verse => ({
+  id,
+  sid,
+  nbr,
+  paragraph,
+  children: JSON.parse(children) as VerseChild[],
+});
+
 export default class ModuleService {
   private db: Database | undefined;
   private getTextStart = $state<number | undefined>();
   private getTextDebounced = debounce(this.getText, 100);
+  private _groupingMode = $state<GroupingMode>(defaultGroupingMode);
 
   public currentSearch = $state<string | undefined>(defaultSearch);
   public currentSearchType = $state<SearchType | undefined>(defaultSearchType);
   public prevParaBuffer = $state<Record<number, Verse[]>>({});
   public activePara = $state<Verse[]>([]);
   public nextParaBuffer = $state<Record<number, Verse[]>>({});
+  public prevVerseBuffer = $state<Verse[]>([]);
+  public activeVerse = $state<Verse | undefined>(undefined);
+  public nextVerseBuffer = $state<Verse[]>([]);
   public books = $state<Record<string, Book>>({});
   public scrollToSid = $state<string | undefined>();
   public selectInProgress = $state<boolean>(true);
@@ -43,9 +59,11 @@ export default class ModuleService {
 
     // Watch search and search type.
     $effect(() => {
+      const groupingMode = appSettingsService.groupingMode;
       const currentSearch = this.currentSearch ?? defaultSearch;
       const currentSearchType = this.currentSearchType ?? defaultSearchType;
       untrack(() => {
+        this.groupingMode = groupingMode;
         this.selectInProgress = true;
         this.getTextDebounced(currentSearch, currentSearchType).then(() => {
           // Need to wait for scrolling to finish.
@@ -65,6 +83,18 @@ export default class ModuleService {
         this.scrollPct = 0; // This sets the reference to GEN 1:1
       }
     });
+  }
+
+  public get groupingMode() {
+    return this._groupingMode;
+  }
+
+  private set groupingMode(groupingMode: 'verse' | 'paragraph') {
+    this._groupingMode = groupingMode;
+  }
+
+  public get bufferSize() {
+    return this.groupingMode === 'paragraph' ? paraBuffer : verseBuffer;
   }
 
   /**
@@ -120,7 +150,23 @@ export default class ModuleService {
     this.referenceLabel = '';
   }
 
-  public async moveActiveDownOnePara(): Promise<void> {
+  public async moveActiveDownOne(): Promise<void> {
+    if (this.groupingMode === 'paragraph') {
+      await this.moveActiveDownOnePara();
+    } else {
+      await this.moveActiveDownOneVerse();
+    }
+  }
+
+  public async moveActiveUpOne(): Promise<void> {
+    if (this.groupingMode === 'paragraph') {
+      await this.moveActiveUpOnePara();
+    } else {
+      await this.moveActiveUpOneVerse();
+    }
+  }
+
+  private async moveActiveDownOnePara(): Promise<void> {
     const keys = Object.keys(this.nextParaBuffer);
     if (keys.length === 0) return;
 
@@ -139,7 +185,7 @@ export default class ModuleService {
     this.selectInProgress = false;
   }
 
-  public async moveActiveUpOnePara(): Promise<void> {
+  private async moveActiveUpOnePara(): Promise<void> {
     const keys = Object.keys(this.prevParaBuffer);
     if (keys.length === 0) return;
 
@@ -154,6 +200,39 @@ export default class ModuleService {
     const firstVerse = active?.[0];
     if (firstVerse) {
       this.setScrollPositionFromMouseScrolling(firstVerse);
+    }
+    this.selectInProgress = false;
+  }
+
+  private async moveActiveDownOneVerse(): Promise<void> {
+    this.selectInProgress = true;
+
+    const nextVerseNumber = this.nextVerseBuffer?.[0]?.id;
+    if (!nextVerseNumber) return;
+
+    const { prev, active, next } = await this.getVerses(nextVerseNumber);
+    this.prevVerseBuffer = prev;
+    this.activeVerse = active;
+    this.nextVerseBuffer = next;
+    if (this.activeVerse) {
+      this.setScrollPositionFromMouseScrolling(this.activeVerse);
+    }
+    this.selectInProgress = false;
+  }
+
+  private async moveActiveUpOneVerse(): Promise<void> {
+    this.selectInProgress = true;
+
+    const prevVerseNumber =
+      this.prevVerseBuffer?.[this.prevVerseBuffer.length - 1]?.id;
+    if (!prevVerseNumber) return;
+
+    const { prev, active, next } = await this.getVerses(prevVerseNumber);
+    this.prevVerseBuffer = prev;
+    this.activeVerse = active;
+    this.nextVerseBuffer = next;
+    if (this.activeVerse) {
+      this.setScrollPositionFromMouseScrolling(this.activeVerse);
     }
     this.selectInProgress = false;
   }
@@ -187,7 +266,10 @@ export default class ModuleService {
   ): Promise<void> {
     const start = Date.now();
     this.getTextStart = start;
-    if (currentSearchType === 'ref-point') {
+    if (
+      currentSearchType === 'ref-point' &&
+      this.groupingMode === 'paragraph'
+    ) {
       const paraId = await this.getParagraphIdBySid(currentSearch);
       const { prev, active, next } = await this.getVersesByParagraphs(paraId);
 
@@ -197,9 +279,30 @@ export default class ModuleService {
         this.activePara = active;
         this.nextParaBuffer = next;
         this.scrollToSid = currentSearch; // Triggers scrollIntoView in paragraph.svelte
+        this.prevVerseBuffer = [];
+        this.activeVerse = undefined;
+        this.nextVerseBuffer = [];
+      }
+    } else if (
+      currentSearchType === 'ref-point' &&
+      this.groupingMode === 'verse'
+    ) {
+      const verseId = await this.getVerseIdBySid(currentSearch);
+      const { prev, active, next } = await this.getVerses(verseId);
+
+      // Only set results if this is the last call to getText.
+      if (this.getTextStart === start) {
+        this.prevVerseBuffer = prev;
+        this.activeVerse = active;
+        this.nextVerseBuffer = next;
+        this.scrollToSid = currentSearch; // Triggers scrollIntoView in verse.svelte
+        this.prevParaBuffer = {};
+        this.activePara = [];
+        this.nextParaBuffer = {};
       }
     }
   }
+
   private async getParagraphIdBySid(verseSid: string): Promise<number> {
     const db = await this.getDb();
     const result = await db.select<{ paragraph: number }[]>(
@@ -228,20 +331,6 @@ export default class ModuleService {
     );
     console.log(`sel ran in ${Date.now() - start}ms.`); // TODO: remove this
 
-    const mapVerse = ({
-      id,
-      sid,
-      nbr,
-      paragraph,
-      children,
-    }: VerseRow): Verse => ({
-      id,
-      sid,
-      nbr,
-      paragraph,
-      children: JSON.parse(children) as VerseChild[],
-    });
-
     const prev = Object.groupBy(
       verseResults.filter((v) => v.paragraph < paraId).map(mapVerse),
       (v) => v.paragraph
@@ -253,6 +342,40 @@ export default class ModuleService {
       verseResults.filter((v) => v.paragraph > paraId).map(mapVerse),
       (v) => v.paragraph
     ) as Record<string, Verse[]>;
+    return { prev, active, next };
+  }
+
+  private async getVerseIdBySid(verseSid: string): Promise<number> {
+    const db = await this.getDb();
+    const result = await db.select<{ id: number }[]>(
+      'SELECT id FROM verses WHERE sid = $1',
+      [verseSid]
+    );
+    return result?.[0]?.id ?? 0;
+  }
+
+  private async getVerses(verseId: number): Promise<{
+    prev: Verse[];
+    active: Verse | undefined;
+    next: Verse[];
+  }> {
+    const fromVerse = verseId - verseBuffer;
+    const thruVerse = verseId + verseBuffer;
+
+    const db = await this.getDb();
+    const start = Date.now();
+    const verseResults = await db.select<VerseRow[]>(
+      `
+          SELECT v.id, v.sid, v.nbr, v.paragraph, v.children
+          FROM verses v
+          WHERE v.id BETWEEN $1 AND $2`,
+      [fromVerse, thruVerse]
+    );
+    console.log(`sel ran in ${Date.now() - start}ms.`); // TODO: remove this
+    const prev = verseResults.filter((v) => v.id < verseId).map(mapVerse);
+    const activeRow = verseResults.find((v) => v.id === verseId);
+    const active = activeRow ? mapVerse(activeRow) : undefined;
+    const next = verseResults.filter((v) => v.id > verseId).map(mapVerse);
     return { prev, active, next };
   }
 

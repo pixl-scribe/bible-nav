@@ -1,11 +1,13 @@
 import { Store } from '@tauri-apps/plugin-store';
 import debounce from '$lib/services/debounce';
+import type { GroupingMode } from '$lib/services/module-service.svelte';
 
 export interface AppSettings {
   theme: string;
   locale: string;
   lastSearch: string;
   lastVerseSid: string;
+  groupingMode: GroupingMode;
 }
 
 const defaultSettings: AppSettings = {
@@ -13,6 +15,7 @@ const defaultSettings: AppSettings = {
   locale: 'en-US',
   lastSearch: '',
   lastVerseSid: 'GEN 1:1', // sid = verse start identifier. See https://ubsicap.github.io/usx/elements.html#verse
+  groupingMode: 'paragraph',
 };
 
 class AppSettingsService {
@@ -30,6 +33,10 @@ class AppSettingsService {
 
   public get isLoading(): boolean {
     return this._isLoading.valueOf();
+  }
+
+  public get groupingMode(): GroupingMode {
+    return this._settings?.groupingMode ?? 'paragraph';
   }
 
   public async getSettings(): Promise<AppSettings> {
