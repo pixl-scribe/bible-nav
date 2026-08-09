@@ -7,6 +7,7 @@ import debounce from '$lib/services/debounce';
 import rawVerseCounts from '$lib/assets/bible-verse-counts.yaml';
 import type { BibleVerseCounts } from '$lib/model/bible-verse-counts';
 import { appSettingsService } from './app-settings-service.svelte';
+import type { AutoCompleteOption } from '$lib/model/auto-complete-option';
 
 export type SearchType = 'ref' | 'ref-point' | 'text';
 export type GroupingMode = 'verse' | 'paragraph';
@@ -37,6 +38,8 @@ export default class ModuleService {
   private getTextDebounced = debounce(this.getText, 100);
   private _groupingMode = $state<GroupingMode>(defaultGroupingMode);
 
+  public searchInput = $state<string>('');
+  public autoCompleteOptions = $state<AutoCompleteOption[]>([]);
   public currentSearch = $state<string | undefined>(defaultSearch);
   public currentSearchType = $state<SearchType | undefined>(defaultSearchType);
   public prevParaBuffer = $state<Record<number, Verse[]>>({});
@@ -82,6 +85,13 @@ export default class ModuleService {
       if (this.books && Object.keys(this.books).length > 0) {
         this.scrollPct = 0; // This sets the reference to GEN 1:1
       }
+    });
+
+    $effect(() => {
+      const searchInput = this.searchInput;
+      untrack(() => {
+        this.evaluateSearchInput(searchInput);
+      });
     });
   }
 
@@ -164,6 +174,83 @@ export default class ModuleService {
     } else {
       await this.moveActiveUpOneVerse();
     }
+  }
+
+  public autoCompleteUp() {
+    if (this.autoCompleteOptions.length < 2) return;
+
+    const currentSelectedIndex = this.autoCompleteOptions.findIndex(
+      (op) => op.selected
+    );
+    const newSelectedIndex =
+      currentSelectedIndex === 0
+        ? this.autoCompleteOptions.length - 1
+        : currentSelectedIndex - 1;
+    this.autoCompleteOptions[currentSelectedIndex].selected = false;
+    this.autoCompleteOptions[newSelectedIndex].selected = true;
+  }
+
+  public autoCompleteDown() {
+    if (this.autoCompleteOptions.length < 2) return;
+
+    const currentSelectedIndex = this.autoCompleteOptions.findIndex(
+      (op) => op.selected
+    );
+    const newSelectedIndex =
+      currentSelectedIndex === this.autoCompleteOptions.length - 1
+        ? 0
+        : currentSelectedIndex + 1;
+    this.autoCompleteOptions[currentSelectedIndex].selected = false;
+    this.autoCompleteOptions[newSelectedIndex].selected = true;
+  }
+
+  public autoCompletePick() {
+    const selectedOption = this.autoCompleteOptions.find(
+      (op) => op.selected
+    );
+    if (selectedOption) {
+      this.searchInput =
+        selectedOption.type === 'ref'
+          ? `Ref: ${selectedOption.value}`
+          : selectedOption.value;
+    }
+  }
+
+  private evaluateSearchInput(searchInput: string) {
+    this.autoCompleteOptions = [];
+    const trimmedSearch = searchInput.trim().toLowerCase();
+
+    if (trimmedSearch.length < 2) {
+      this.currentSearch = defaultSearch;
+      this.currentSearchType = defaultSearchType;
+      // close auto complete
+      return;
+    }
+    this.addReferenceAutoCompleteOptions(trimmedSearch);
+
+    if (this.autoCompleteOptions.length > 0) {
+      this.autoCompleteOptions[0].selected = true;
+    }
+
+    // TODO: perform search
+  }
+
+  private addReferenceAutoCompleteOptions(searchInput: string) {
+    const books = Object.values(this.books).filter(
+      (book) =>
+        book.toc3.toLowerCase().startsWith(searchInput) ||
+        book.toc2.toLowerCase().startsWith(searchInput)
+    );
+    this.autoCompleteOptions.push(
+      ...books.map(
+        (b) =>
+          ({
+            value: b.toc2,
+            type: 'ref',
+            count: undefined,
+          }) as AutoCompleteOption
+      )
+    );
   }
 
   private async moveActiveDownOnePara(): Promise<void> {
