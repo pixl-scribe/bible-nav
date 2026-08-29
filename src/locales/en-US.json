@@ -4,6 +4,7 @@
   "main.new-search": "New Search",
   "bible-text.search": "Search",
   "bible-text.add-parallel": "Add Parallel Text",
+  "bible-text.book": "Book: ",
   "settings.heading": "Application Settings",
   "settings.theme": "Theme",
   "settings.theme.default": "Default",

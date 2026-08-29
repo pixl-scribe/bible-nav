@@ -145,14 +145,14 @@
         class="menu menu-sm bg-base-100 rounded-box w-56 absolute top-12 left-2 border border-base-content/20 shadow-md"
       >
         {#each moduleService.autoCompleteOptions as option, i (i)}
-          <!-- svelte-ignore a11y_missing_attribute -->
           <li class={{ 'bg-primary': option.selected }}>
-            <a>
+            <button onclick={() => moduleService?.autoCompletePick(option)}>
               {#if option.type === 'ref'}
-                <span class="text-base-content/60">Ref:</span>
+                <span class="text-base-content/60">{$_('bible-text.book')}</span
+                >
               {/if}
               {option.value}
-            </a>
+            </button>
           </li>
         {/each}
       </ul>

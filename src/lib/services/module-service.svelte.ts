@@ -2,12 +2,13 @@ import Database from '@tauri-apps/plugin-sql'; // requires svelte service
 import { appDataDir } from '@tauri-apps/api/path';
 import type { Verse, VerseChild, VerseRow } from '$lib/model/verse';
 import type { Book } from '$lib/model/book';
-import { untrack } from 'svelte';
+import { tick, untrack } from 'svelte';
 import debounce from '$lib/services/debounce';
 import rawVerseCounts from '$lib/assets/bible-verse-counts.yaml';
 import type { BibleVerseCounts } from '$lib/model/bible-verse-counts';
 import { appSettingsService } from './app-settings-service.svelte';
 import type { AutoCompleteOption } from '$lib/model/auto-complete-option';
+import { splitByLastDelimiter } from '$lib/services/string-utils';
 
 export type SearchType = 'ref' | 'ref-point' | 'text';
 export type GroupingMode = 'verse' | 'paragraph';
@@ -23,6 +24,7 @@ const verseCount = Object.values(allVerseCounts).reduce(
   (acc, curr) => acc + curr.reduce((acc2, curr2) => acc2 + curr2, 0),
   0
 ); // 31,102 verses
+const searchDelimiters = [' ', ';'];
 
 const mapVerse = ({ id, sid, nbr, paragraph, children }: VerseRow): Verse => ({
   id,
@@ -55,6 +57,7 @@ export default class ModuleService {
   public adjustingScrollPct = $state<boolean>(false);
   public moduleName = $state<string>('');
   public referenceLabel = $state<string>('');
+  public autoCompletePickInProgress = $state<boolean>(false);
 
   constructor(private moduleId: string) {
     this.getModule().then();
@@ -204,29 +207,42 @@ export default class ModuleService {
     this.autoCompleteOptions[newSelectedIndex].selected = true;
   }
 
-  public autoCompletePick() {
-    const selectedOption = this.autoCompleteOptions.find(
-      (op) => op.selected
-    );
+  public async autoCompletePick(
+    selectedOption?: AutoCompleteOption
+  ): Promise<void> {
+    if (!selectedOption) {
+      selectedOption = this.autoCompleteOptions.find((op) => op.selected);
+    }
     if (selectedOption) {
-      this.searchInput =
-        selectedOption.type === 'ref'
-          ? `Ref: ${selectedOption.value}`
-          : selectedOption.value;
+      const [before, _after] = splitByLastDelimiter(
+        this.searchInput,
+        searchDelimiters
+      );
+      this.autoCompletePickInProgress = true;
+      this.searchInput = `${before ?? ''} ${selectedOption.value}`.trim();
+      this.autoCompleteOptions = [];
+      await tick();
+      this.autoCompletePickInProgress = false;
     }
   }
 
   private evaluateSearchInput(searchInput: string) {
-    this.autoCompleteOptions = [];
-    const trimmedSearch = searchInput.trim().toLowerCase();
+    if (this.autoCompletePickInProgress) return;
 
-    if (trimmedSearch.length < 2) {
+    this.autoCompleteOptions = [];
+    const searchLower = searchInput.toLowerCase();
+    const [_before, after] = splitByLastDelimiter(
+      searchLower,
+      searchDelimiters
+    );
+
+    if (after.length < 2) {
       this.currentSearch = defaultSearch;
       this.currentSearchType = defaultSearchType;
       // close auto complete
       return;
     }
-    this.addReferenceAutoCompleteOptions(trimmedSearch);
+    this.addReferenceAutoCompleteOptions(after);
 
     if (this.autoCompleteOptions.length > 0) {
       this.autoCompleteOptions[0].selected = true;
