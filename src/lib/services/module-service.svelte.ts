@@ -9,6 +9,7 @@ import type { BibleVerseCounts } from '$lib/model/bible-verse-counts';
 import { appSettingsService } from './app-settings-service.svelte';
 import type { AutoCompleteOption } from '$lib/model/auto-complete-option';
 import { splitByLastDelimiter } from '$lib/services/string-utils';
+import { parseSearch } from '$lib/services/search-parser';
 
 export type SearchType = 'ref' | 'ref-point' | 'text';
 export type GroupingMode = 'verse' | 'paragraph';
@@ -24,7 +25,7 @@ const verseCount = Object.values(allVerseCounts).reduce(
   (acc, curr) => acc + curr.reduce((acc2, curr2) => acc2 + curr2, 0),
   0
 ); // 31,102 verses
-const searchDelimiters = [' ', ';'];
+const searchDelimiters = [' ', ',', ';'];
 
 const mapVerse = ({ id, sid, nbr, paragraph, children }: VerseRow): Verse => ({
   id,
@@ -226,8 +227,11 @@ export default class ModuleService {
     }
   }
 
-  private evaluateSearchInput(searchInput: string) {
-    if (this.autoCompletePickInProgress) return;
+  private async evaluateSearchInput(searchInput: string): Promise<void> {
+    if (this.autoCompletePickInProgress) {
+      await this.performSearch();
+      return;
+    }
 
     this.autoCompleteOptions = [];
     const searchLower = searchInput.toLowerCase();
@@ -236,19 +240,29 @@ export default class ModuleService {
       searchDelimiters
     );
 
+    // bring up auto complete
     if (after.length < 2) {
       this.currentSearch = defaultSearch;
       this.currentSearchType = defaultSearchType;
       // close auto complete
-      return;
-    }
-    this.addReferenceAutoCompleteOptions(after);
+    } else {
+      this.addReferenceAutoCompleteOptions(after);
+      // TODO: Add word auto complete options.
 
-    if (this.autoCompleteOptions.length > 0) {
-      this.autoCompleteOptions[0].selected = true;
+      if (this.autoCompleteOptions.length > 0) {
+        this.autoCompleteOptions[0].selected = true;
+      }
     }
 
-    // TODO: perform search
+    await this.performSearch();
+  }
+
+  private async performSearch(): Promise<void> {
+    const searchLower = this.searchInput.toLowerCase().trim();
+    if (searchLower.length < 2) return;
+
+    const searchRequest = parseSearch(searchLower);
+    console.log({ searchInput: this.searchInput, searchRequest });
   }
 
   private addReferenceAutoCompleteOptions(searchInput: string) {

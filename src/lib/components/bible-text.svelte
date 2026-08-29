@@ -1,11 +1,10 @@
 <script lang="ts">
-  import { Columns2, Search, Plus } from '@lucide/svelte';
   import { onMount, untrack } from 'svelte';
-  import { _ } from 'svelte-i18n';
   import ModuleService from '$lib/services/module-service.svelte';
   import IndicatorScrollBar from './indicator-scroll-bar.svelte';
   import Paragraph from './paragraph.svelte';
   import Verse from './verse.svelte';
+  import SearchRow from './search-row.svelte';
 
   let { moduleId }: { moduleId: string } = $props();
 
@@ -39,34 +38,6 @@
       scrollableElement?.removeEventListener('scroll', updatePosition);
     };
   });
-
-  let searchInput = $state({
-    get value() {
-      return moduleService?.searchInput ?? '';
-    },
-    set value(val: string) {
-      if (moduleService) {
-        moduleService.searchInput = val;
-      }
-    },
-  });
-
-  function handleSearchKeydown(event: KeyboardEvent) {
-    switch (event.key) {
-      case 'ArrowUp':
-        event.preventDefault();
-        moduleService?.autoCompleteUp();
-        break;
-      case 'ArrowDown':
-        event.preventDefault();
-        moduleService?.autoCompleteDown();
-        break;
-      case 'Enter':
-        event.preventDefault();
-        moduleService?.autoCompletePick();
-        break;
-    }
-  }
 
   $effect(() => {
     if (activeStatus === 'above') {
@@ -122,48 +93,7 @@
 <div
   class="flex flex-col bg-base-200 rounded-xl w-full flex-1 max-w-140 ml-1 h-full items-start"
 >
-  <div class="flex w-full p-2 relative">
-    <label class="input w-full">
-      <Search />
-      <input
-        type="search"
-        required
-        placeholder={$_('bible-text.search')}
-        bind:value={searchInput.value}
-        onkeydown={handleSearchKeydown}
-      />
-    </label>
-    <button
-      class="btn btn-soft btn-primary px-1 ml-2 tooltip tooltip-bottom"
-      data-tip={$_('bible-text.add-parallel')}
-    >
-      <Plus size={16} />
-      <Columns2 />
-    </button>
-    {#if moduleService && moduleService.autoCompleteOptions.length > 0}
-      <ul
-        class="menu menu-sm bg-base-100 rounded-box w-56 absolute top-12 left-2 border border-base-content/20 shadow-md"
-      >
-        {#each moduleService.autoCompleteOptions as option, i (i)}
-          <li class={{ 'bg-primary': option.selected }}>
-            <button onclick={() => moduleService?.autoCompletePick(option)}>
-              {#if option.type === 'ref'}
-                <span class="text-base-content/60">{$_('bible-text.book')}</span
-                >
-              {/if}
-              {option.value}
-            </button>
-          </li>
-        {/each}
-      </ul>
-    {/if}
-  </div>
-  <div
-    class="flex justify-between text-xs text-base-content/60 w-full px-2 pb-2 border-b border-base-content/10"
-  >
-    <div>{moduleService?.moduleName}</div>
-    <div>{moduleService?.referenceLabel}</div>
-  </div>
+  <SearchRow {moduleService} />
   <div class="flex w-full pt-2 pl-2 pb-2">
     <div
       class="flex flex-col h-[calc(100vh-104px)] w-full overflow-y-auto text-lg leading-relaxed scrollable-region"

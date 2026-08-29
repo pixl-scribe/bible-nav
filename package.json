@@ -23,6 +23,7 @@
     "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-sql": "^2.4.0",
     "@tauri-apps/plugin-store": "^2.4.3",
+    "bible-passage-reference-parser": "^4.0.0",
     "daisyui": "^5.7.4",
     "svelte-i18n": "^4.0.1",
     "tailwindcss": "^4.3.3"
