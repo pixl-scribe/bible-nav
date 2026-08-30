@@ -1,7 +1,8 @@
 import Database from '@tauri-apps/plugin-sql';
 import { appDataDir } from '@tauri-apps/api/path';
 import type { Verse, VerseChild, VerseRow } from '$lib/model/verse';
-import type { Book } from '$lib/model/book'; // requires svelte service
+import type { Book } from '$lib/model/book';
+import {mapBibleRefToSql} from "$lib/services/map-bible-ref-to-sql"; // requires svelte service
 
 export const paraBuffer = 20;
 export const verseBuffer = 40;
@@ -117,12 +118,28 @@ export default class ModuleDbService {
     active: Verse | undefined;
     next: Verse[];
   }> {
-    const refs = ref.split(',');
-    console.log({ refs });
-    for (const ref of refs) {
-      const [from, to] = ref.split('-');
+    const whereClause = mapBibleRefToSql(ref);
+
+    const db = await this.getDb();
+    const start = Date.now();
+    const verseResults = await db.select<VerseRow[]>(
+      `
+          SELECT v.id, v.sid, v.nbr, v.paragraph, v.children
+          FROM verses v
+          WHERE ${whereClause}`
+    );
+    let active: Verse | undefined = undefined;
+    let next: Verse[] = [];
+    if (verseResults.length > 0) {
+      const activeRow = verseResults[0];
+      active = activeRow ? mapVerse(activeRow) : undefined;
+      if (verseResults.length > 1) {
+        next = verseResults.slice(1).map(mapVerse);
+      }
     }
-    return { prev: [], active: undefined, next: [] };
+    console.log(`sel ran in ${Date.now() - start}ms.`); // TODO: remove this
+
+    return { prev: [], active, next };
   }
 
   private async getDb(): Promise<Database> {

@@ -99,7 +99,7 @@
       class="flex flex-col h-[calc(100vh-104px)] w-full overflow-y-auto text-lg leading-relaxed scrollable-region"
       bind:this={scrollableElement}
     >
-      {#if bibleTextService?.groupingMode === 'paragraph'}
+      {#if bibleTextService?.groupingMode === 'paragraph' && bibleTextService?.currentSearchType !== 'ref'}
         {#each Object.entries(bibleTextService?.prevParaBuffer ?? {}) as [paraIndex, verses], i (paraIndex)}
           <div bind:this={prevElements[i]}>
             <Paragraph {verses} {bibleTextService} />

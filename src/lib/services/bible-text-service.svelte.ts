@@ -429,7 +429,23 @@ export default class BibleTextService {
   }
 
   private async getVersesByRef(currentSearch: string): Promise<void> {
+    const start = Date.now();
+    this.getTextStart = start;
+
     const { prev, active, next } =
       await this.moduleDbService.getVersesByRef(currentSearch);
+
+    // Only set results if this is the last call to getText.
+    if (this.getTextStart === start) {
+      this.prevVerseBuffer = prev;
+      this.activeVerse = active;
+      this.nextVerseBuffer = next;
+      if (active) {
+        this.scrollToSid = active.sid; // Triggers scrollIntoView in verse.svelte
+      }
+      this.prevParaBuffer = {};
+      this.activePara = [];
+      this.nextParaBuffer = {};
+    }
   }
 }
