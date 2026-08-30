@@ -255,11 +255,10 @@ export default class BibleTextService {
     const searchLower = this.searchInput.toLowerCase().trim();
     if (searchLower.length < 2) return;
 
-    const searchRequest = parseSearch(searchLower);
-    console.log({ searchInput: this.searchInput, searchRequest });
+    const { searchType, searchString } = parseSearch(searchLower);
 
-    this.currentSearchType = searchRequest.searchType;
-    this.currentSearch = searchRequest.searchString;
+    this.currentSearchType = searchType;
+    this.currentSearch = searchString;
   }
 
   private addReferenceAutoCompleteOptions(searchInput: string) {
@@ -383,7 +382,7 @@ export default class BibleTextService {
         await this.getVerses(currentSearch);
         break;
       case currentSearchType === 'ref':
-        console.log('Searching by ref...', currentSearch);
+        await this.getVersesByRef(currentSearch);
         break;
     }
   }
@@ -427,5 +426,10 @@ export default class BibleTextService {
       this.activePara = [];
       this.nextParaBuffer = {};
     }
+  }
+
+  private async getVersesByRef(currentSearch: string): Promise<void> {
+    const { prev, active, next } =
+      await this.moduleDbService.getVersesByRef(currentSearch);
   }
 }

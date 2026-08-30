@@ -11,6 +11,7 @@ export function parseSearch(search: string): SearchRequest {
   const bcv = new bcv_parser(langEn);
   bcv.set_options({
     versification_system: 'kjv',
+    osis_compaction_strategy: 'bcv',
   });
   const result = bcv.parse(search).osis();
   if (result) {
@@ -25,3 +26,4 @@ export function parseSearch(search: string): SearchRequest {
     searchString: search,
   };
 }
+

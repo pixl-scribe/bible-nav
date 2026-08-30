@@ -109,6 +109,22 @@ export default class ModuleDbService {
     return { prev, active, next };
   }
 
+  /**
+   * @param ref
+   */
+  public async getVersesByRef(ref: string): Promise<{
+    prev: Verse[];
+    active: Verse | undefined;
+    next: Verse[];
+  }> {
+    const refs = ref.split(',');
+    console.log({ refs });
+    for (const ref of refs) {
+      const [from, to] = ref.split('-');
+    }
+    return { prev: [], active: undefined, next: [] };
+  }
+
   private async getDb(): Promise<Database> {
     if (this.db !== undefined) {
       return this.db;
