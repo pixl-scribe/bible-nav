@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type ModuleService from '$lib/services/module-service.svelte';
+  import type BibleTextService from '$lib/services/bible-text-service.svelte.js';
   import { untrack } from 'svelte';
 
-  let { moduleService }: { moduleService: ModuleService | undefined } =
+  let { bibleTextService }: { bibleTextService: BibleTextService | undefined } =
     $props();
 
   let trackEl = $state<HTMLDivElement>();
@@ -19,8 +19,8 @@
     let pct = ((e.clientY - rect.top) / rect.height) * 100;
     if (pct < 0) pct = 0;
     if (pct > 100) pct = 100;
-    if (moduleService) {
-      moduleService.scrollPct = pct;
+    if (bibleTextService) {
+      bibleTextService.scrollPct = pct;
     }
   }
 
@@ -33,9 +33,9 @@
    * Watches scroll value and reloads text when it changes.
    */
   $effect(() => {
-    const newScrollValue = moduleService?.scrollPct;
+    const newScrollValue = bibleTextService?.scrollPct;
     untrack(() => {
-      moduleService?.setReference(newScrollValue);
+      bibleTextService?.setReference(newScrollValue);
     });
   });
 </script>
@@ -46,15 +46,15 @@
     class="slider-track bg-base-content/10 relative w-2 rounded h-full cursor-pointer"
     onpointerdown={handlePointerDown}
     role="slider"
-    aria-valuenow={moduleService?.scrollPct}
+    aria-valuenow={bibleTextService?.scrollPct}
     aria-valuemin={0}
     aria-valuemax={100}
     tabindex="0"
   >
     <div
       class="slider-thumb flex justify-center align-items-center absolute h-6 left-1/2 tooltip tooltip-primary z-10"
-      data-tip={moduleService?.referenceLabel}
-      style="top: {moduleService?.scrollPct}%"
+      data-tip={bibleTextService?.referenceLabel}
+      style="top: {bibleTextService?.scrollPct}%"
     >
       <div
         class="bg-primary mask mask-hexagon-2 w-8 h-6 absolute top-0 left-0"

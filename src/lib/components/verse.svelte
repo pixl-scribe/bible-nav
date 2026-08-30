@@ -1,22 +1,22 @@
 <script lang="ts">
   import type { Verse } from '$lib/model/verse';
-  import type ModuleService from '$lib/services/module-service.svelte';
+  import type BibleTextService from '$lib/services/bible-text-service.svelte.js';
   import VerseText from './verse-text.svelte';
 
   let {
     verse,
     class: className = '',
-    moduleService,
+    bibleTextService,
   }: {
     verse: Verse;
     class?: string;
-    moduleService: ModuleService | undefined;
+    bibleTextService: BibleTextService | undefined;
   } = $props();
 </script>
 
 <p class="{className} my-1">
   <span class="text-xs text-base-content/60" id={verse.sid}
-    >{moduleService?.formatRefFromSid(verse.sid)}</span
+    >{bibleTextService?.formatRefFromSid(verse.sid)}</span
   >
   <VerseText {verse} />
 </p>

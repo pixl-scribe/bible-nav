@@ -1,18 +1,21 @@
 <script lang="ts">
   import { Columns2, Plus, Search } from '@lucide/svelte';
   import { _ } from 'svelte-i18n';
-  import ModuleService from '$lib/services/module-service.svelte';
+  import BibleTextService from '$lib/services/bible-text-service.svelte.js';
+  import type { AutoCompleteOption } from '$lib/model/auto-complete-option';
 
-  let { moduleService }: { moduleService: ModuleService | undefined } =
+  let { bibleTextService }: { bibleTextService: BibleTextService | undefined } =
     $props();
+
+  let inputRef = $state<HTMLInputElement | undefined>(undefined);
 
   let searchInput = $state({
     get value() {
-      return moduleService?.searchInput ?? '';
+      return bibleTextService?.searchInput ?? '';
     },
     set value(val: string) {
-      if (moduleService) {
-        moduleService.searchInput = val;
+      if (bibleTextService) {
+        bibleTextService.searchInput = val;
       }
     },
   });
@@ -21,17 +24,22 @@
     switch (event.key) {
       case 'ArrowUp':
         event.preventDefault();
-        moduleService?.autoCompleteUp();
+        bibleTextService?.autoCompleteUp();
         break;
       case 'ArrowDown':
         event.preventDefault();
-        moduleService?.autoCompleteDown();
+        bibleTextService?.autoCompleteDown();
         break;
       case 'Enter':
         event.preventDefault();
-        moduleService?.autoCompletePick();
+        bibleTextService?.autoCompletePick();
         break;
     }
+  }
+
+  function onClickAutoComplete(option: AutoCompleteOption) {
+    bibleTextService?.autoCompletePick(option);
+    inputRef?.focus();
   }
 </script>
 
@@ -42,6 +50,7 @@
       type="search"
       required
       placeholder={$_('bible-text.search')}
+      bind:this={inputRef}
       bind:value={searchInput.value}
       onkeydown={handleSearchKeydown}
     />
@@ -53,13 +62,13 @@
     <Plus size={16} />
     <Columns2 />
   </button>
-  {#if moduleService && moduleService.autoCompleteOptions.length > 0}
+  {#if bibleTextService && bibleTextService.autoCompleteOptions.length > 0}
     <ul
       class="menu menu-sm bg-base-100 rounded-box w-56 absolute top-12 left-2 border border-base-content/20 shadow-md"
     >
-      {#each moduleService.autoCompleteOptions as option, i (i)}
+      {#each bibleTextService.autoCompleteOptions as option, i (i)}
         <li class={{ 'bg-primary': option.selected }}>
-          <button onclick={() => moduleService?.autoCompletePick(option)}>
+          <button onclick={() => onClickAutoComplete(option)}>
             {#if option.type === 'ref'}
               <span class="text-base-content/60">{$_('bible-text.book')}</span>
             {/if}
@@ -73,6 +82,6 @@
 <div
   class="flex justify-between text-xs text-base-content/60 w-full px-2 pb-2 border-b border-base-content/10"
 >
-  <div>{moduleService?.moduleName}</div>
-  <div>{moduleService?.referenceLabel}</div>
+  <div>{bibleTextService?.moduleName}</div>
+  <div>{bibleTextService?.referenceLabel}</div>
 </div>

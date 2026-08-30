@@ -8,7 +8,7 @@
     appSettingsService,
   } from '$lib/services/app-settings-service.svelte.js';
   import { onMount } from 'svelte';
-  import type { GroupingMode } from '$lib/services/module-service.svelte';
+  import type { GroupingMode } from '$lib/services/bible-text-service.svelte.js';
 
   let appSettings = $state<AppSettings | undefined>(undefined);
 

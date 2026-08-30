@@ -1,6 +1,6 @@
 import { Store } from '@tauri-apps/plugin-store';
 import debounce from '$lib/services/debounce';
-import type { GroupingMode } from '$lib/services/module-service.svelte';
+import type { GroupingMode } from '$lib/services/bible-text-service.svelte.js';
 
 export interface AppSettings {
   theme: string;
