@@ -82,6 +82,6 @@
 <div
   class="flex justify-between text-xs text-base-content/60 w-full px-2 pb-2 border-b border-base-content/10"
 >
-  <div>{bibleTextService?.moduleName} {bibleTextService?.currentSearch}</div>
+  <div>{bibleTextService?.moduleName}</div>
   <div>{bibleTextService?.referenceLabel}</div>
 </div>

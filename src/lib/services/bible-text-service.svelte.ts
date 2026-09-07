@@ -14,12 +14,13 @@ import ModuleDbService, {
 } from '$lib/services/module-db-service.svelte';
 
 export type GroupingMode = 'verse' | 'paragraph';
-//const defaultSearch = 'GEN 1:1';
-const defaultSearch = 'Gen.1.1-Gen.1.20';
-//const defaultSearchType: SearchType = 'ref-point';
-const defaultSearchType: SearchType = 'ref';
-//const defaultGroupingMode: GroupingMode = 'paragraph';
-const defaultGroupingMode: GroupingMode = 'verse';
+const defaultSearch = 'GEN 1:1';
+//const defaultSearch = 'Gen.1.1-Gen.5.20';
+const defaultSearchType: SearchType = 'ref-point';
+//const defaultSearchType: SearchType = 'ref';
+const defaultGroupingMode: GroupingMode = 'paragraph';
+//const defaultGroupingMode: GroupingMode = 'verse';
+const selectInProgressTimeout = 500;
 
 const verseCounts = rawVerseCounts as BibleVerseCounts;
 const allVerseCounts = { ...verseCounts.OT, ...verseCounts.NT };
@@ -32,6 +33,10 @@ const searchDelimiters = [' ', ',', ';'];
 export default class BibleTextService {
   private getTextStart = $state<number | undefined>();
   private getTextDebounced = debounce(this.getText, 100);
+  private getVersesByRefAndIndexDebounced = debounce(
+    this.getVersesByRefAndIndex,
+    100
+  );
   private _groupingMode = $state<GroupingMode>(defaultGroupingMode);
   private moduleDbService: ModuleDbService;
   private _scrollPct = $state<number | undefined>(undefined);
@@ -53,7 +58,7 @@ export default class BibleTextService {
   public books = $state<Record<string, Book>>({});
   public scrollToSid = $state<string | undefined>();
   public selectInProgress = $state<boolean>(true);
-  public adjustingScrollPct = $state<boolean>(false);
+  public adjustingScrollPctFromMouseWheel = $state<boolean>(false);
   public moduleName = $state<string>('');
   public referenceLabel = $state<string>('');
   public autoCompletePickInProgress = $state<boolean>(false);
@@ -88,12 +93,13 @@ export default class BibleTextService {
     $effect(() => {
       const newScrollValue = this.scrollPct;
       untrack(() => {
+        if (this.adjustingScrollPctFromMouseWheel) return;
         switch (this.currentSearchType) {
           case 'ref-point':
             this.setSearchFromPct(newScrollValue);
             break;
           case 'ref':
-            this.setSearchWithinSidList(newScrollValue);
+            this.setSearchWithinSidList(newScrollValue).then();
             break;
         }
       });
@@ -173,10 +179,8 @@ export default class BibleTextService {
    * Sets currentSearch based on percent of entire bible.
    */
   private setSearchFromPct(newScrollValue: number | undefined): void {
-    // don't do anything if pct is adjusting due to user scrolling
-    if (this.adjustingScrollPct) {
-      return;
-    }
+    if (this.selectInProgress) return;
+
     const books = this.books;
     if (newScrollValue === undefined || books === undefined) {
       this.referenceLabel = '';
@@ -211,24 +215,31 @@ export default class BibleTextService {
   private async setSearchWithinSidList(
     newScrollValue: number | undefined
   ): Promise<void> {
-    // don't do anything if pct is adjusting due to user scrolling
-    if (this.adjustingScrollPct) {
-      return;
-    }
     if (newScrollValue === undefined || this.sids.length === 0) {
       this.referenceLabel = '';
       return;
     }
 
+    console.log(
+      `inside setSearchWithinSidList, newScrollValue: ${newScrollValue}`
+    );
     const index = Math.round((this.sids.length - 1) * (newScrollValue / 100));
     const sid = this.sids[index];
     this.referenceLabel = this.formatAbbreviatedRefFromSid(sid);
+    console.log({ sid, index });
     this.sidIndex = index; // No need to change currentSearch here.
-    await this.getVersesByRefAndIndex(this.currentSearch, index);
+    console.log('1. setSearchWithinSidList');
+    await this.getVersesByRefAndIndexDebounced(this.currentSearch, index);
+    console.log(this.activeVerse?.sid);
   }
 
   public async moveActiveDownOne(): Promise<void> {
-    if (this.groupingMode === 'paragraph') {
+    if (this.selectInProgress) return;
+
+    if (
+      this.currentSearchType === 'ref-point' &&
+      this.groupingMode === 'paragraph'
+    ) {
       await this.moveActiveDownOnePara();
     } else {
       await this.moveActiveDownOneVerse();
@@ -236,7 +247,12 @@ export default class BibleTextService {
   }
 
   public async moveActiveUpOne(): Promise<void> {
-    if (this.groupingMode === 'paragraph') {
+    if (this.selectInProgress) return;
+
+    if (
+      this.currentSearchType === 'ref-point' &&
+      this.groupingMode === 'paragraph'
+    ) {
       await this.moveActiveUpOnePara();
     } else {
       await this.moveActiveUpOneVerse();
@@ -362,7 +378,7 @@ export default class BibleTextService {
     this.nextParaBuffer = next;
     const firstVerse = active?.[0];
     if (firstVerse) {
-      this.setScrollPositionFromMouseScrolling(firstVerse);
+      this.setScrollPositionFromMouseWheel(firstVerse);
     }
     this.selectInProgress = false;
   }
@@ -371,7 +387,6 @@ export default class BibleTextService {
     const keys = Object.keys(this.prevParaBuffer);
     if (keys.length === 0) return;
 
-    this.selectInProgress = true;
     const prevParaNumber = parseInt(keys[keys.length - 1]);
     const { prev, active, next } =
       await this.moduleDbService.getVersesByParagraphs(prevParaNumber);
@@ -381,52 +396,68 @@ export default class BibleTextService {
     this.nextParaBuffer = next;
     const firstVerse = active?.[0];
     if (firstVerse) {
-      this.setScrollPositionFromMouseScrolling(firstVerse);
+      this.setScrollPositionFromMouseWheel(firstVerse);
     }
-    this.selectInProgress = false;
   }
 
   private async moveActiveDownOneVerse(): Promise<void> {
-    this.selectInProgress = true;
-
     const nextVerseNumber = this.nextVerseBuffer?.[0]?.id;
     if (!nextVerseNumber) return;
 
-    const { prev, active, next } =
-      await this.moduleDbService.getVerses(nextVerseNumber);
-    this.prevVerseBuffer = prev;
-    this.activeVerse = active;
-    this.nextVerseBuffer = next;
-    if (this.activeVerse) {
-      this.setScrollPositionFromMouseScrolling(this.activeVerse);
+    if (this.currentSearchType === 'ref-point') {
+      const { prev, active, next } =
+        await this.moduleDbService.getVerses(nextVerseNumber);
+      this.prevVerseBuffer = prev;
+      this.activeVerse = active;
+      this.nextVerseBuffer = next;
+    } else {
+      if (this.sidIndex < this.sids.length - 1) {
+        this.sidIndex = this.sidIndex + 1;
+        console.log('2. moveActiveDownOneVerse...');
+        await this.getVersesByRefAndIndex(this.currentSearch, this.sidIndex);
+      }
     }
-    this.selectInProgress = false;
+
+    if (this.activeVerse) {
+      this.setScrollPositionFromMouseWheel(this.activeVerse);
+    }
   }
 
   private async moveActiveUpOneVerse(): Promise<void> {
-    this.selectInProgress = true;
-
     const prevVerseNumber =
       this.prevVerseBuffer?.[this.prevVerseBuffer.length - 1]?.id;
     if (!prevVerseNumber) return;
 
-    const { prev, active, next } =
-      await this.moduleDbService.getVerses(prevVerseNumber);
-    this.prevVerseBuffer = prev;
-    this.activeVerse = active;
-    this.nextVerseBuffer = next;
-    if (this.activeVerse) {
-      this.setScrollPositionFromMouseScrolling(this.activeVerse);
+    if (this.currentSearchType === 'ref-point') {
+      const { prev, active, next } =
+        await this.moduleDbService.getVerses(prevVerseNumber);
+      this.prevVerseBuffer = prev;
+      this.activeVerse = active;
+      this.nextVerseBuffer = next;
+    } else {
+      if (this.sidIndex > 0) {
+        this.sidIndex = this.sidIndex - 1;
+        console.log('3. moveActiveUpOneVerse...');
+        await this.getVersesByRefAndIndex(this.currentSearch, this.sidIndex);
+      }
     }
-    this.selectInProgress = false;
+
+    if (this.activeVerse) {
+      this.setScrollPositionFromMouseWheel(this.activeVerse);
+    }
   }
 
-  private setScrollPositionFromMouseScrolling(verse: Verse): void {
-    this.adjustingScrollPct = true;
-    this._scrollPct = (verse.id / verseCount) * 100;
+  private setScrollPositionFromMouseWheel(verse: Verse): void {
+    this.adjustingScrollPctFromMouseWheel = true;
+    if (this.currentSearchType === 'ref-point') {
+      this._scrollPct = (verse.id / verseCount) * 100;
+    } else {
+      this._scrollPct = (this.sidIndex / (this.sids.length - 1)) * 100;
+      console.log(`new pct: ${this._scrollPct}`);
+    }
     this.referenceLabel = this.formatAbbreviatedRefFromSid(verse.sid);
     setTimeout(() => {
-      this.adjustingScrollPct = false;
+      this.adjustingScrollPctFromMouseWheel = false;
     }, 500);
   }
 
@@ -470,6 +501,7 @@ export default class BibleTextService {
   private async getVersesByParagraphs(currentSearch: string): Promise<void> {
     const start = Date.now();
     this.getTextStart = start;
+    this.selectInProgress = true;
 
     const paraId =
       await this.moduleDbService.getParagraphIdBySid(currentSearch);
@@ -487,6 +519,10 @@ export default class BibleTextService {
       this.activeVerse = undefined;
       this.nextVerseBuffer = [];
     }
+
+    setTimeout(() => {
+      this.selectInProgress = false;
+    }, selectInProgressTimeout);
   }
 
   /**
@@ -497,6 +533,7 @@ export default class BibleTextService {
   private async getVerses(currentSearch: string): Promise<void> {
     const start = Date.now();
     this.getTextStart = start;
+    this.selectInProgress = true;
 
     const verseId = await this.moduleDbService.getVerseIdBySid(currentSearch);
     const { prev, active, next } =
@@ -513,6 +550,10 @@ export default class BibleTextService {
       this.activePara = [];
       this.nextParaBuffer = {};
     }
+
+    setTimeout(() => {
+      this.selectInProgress = false;
+    }, selectInProgressTimeout);
   }
 
   /**
@@ -523,6 +564,7 @@ export default class BibleTextService {
   private async getVersesByRef(currentSearch: string): Promise<void> {
     const start = Date.now();
     this.getTextStart = start;
+    this.selectInProgress = true;
 
     const sidPromise = this.moduleDbService.getSidsByRef(currentSearch);
     const versePromise = this.moduleDbService.getVersesByRef(currentSearch);
@@ -543,6 +585,10 @@ export default class BibleTextService {
       this.activePara = [];
       this.nextParaBuffer = {};
     }
+
+    setTimeout(() => {
+      this.selectInProgress = false;
+    }, selectInProgressTimeout);
   }
 
   /**
@@ -557,6 +603,7 @@ export default class BibleTextService {
   ): Promise<void> {
     const start = Date.now();
     this.getTextStart = start;
+    this.selectInProgress = true;
 
     const { prev, active, next } = await this.moduleDbService.getVersesByRef(
       currentSearch,
@@ -575,5 +622,9 @@ export default class BibleTextService {
       this.activePara = [];
       this.nextParaBuffer = {};
     }
+
+    setTimeout(() => {
+      this.selectInProgress = false;
+    }, selectInProgressTimeout);
   }
 }
