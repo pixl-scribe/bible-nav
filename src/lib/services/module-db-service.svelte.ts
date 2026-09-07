@@ -2,12 +2,21 @@ import Database from '@tauri-apps/plugin-sql';
 import { appDataDir } from '@tauri-apps/api/path';
 import type { Verse, VerseChild, VerseRow } from '$lib/model/verse';
 import type { Book } from '$lib/model/book';
-import {mapBibleRefToSql} from "$lib/services/map-bible-ref-to-sql"; // requires svelte service
+import { mapBibleRefToSql } from '$lib/services/map-bible-ref-to-sql';
+import { calcLimitAndOffsetWithButter } from '$lib/services/calc-limit-and-offset'; // requires svelte service
 
 export const paraBuffer = 20;
 export const verseBuffer = 40;
 
-const mapVerse = ({ id, sid, nbr, paragraph, children }: VerseRow): Verse => ({
+const mapVerse = ({
+  idx,
+  id,
+  sid,
+  nbr,
+  paragraph,
+  children,
+}: VerseRow): Verse => ({
+  idx,
   id,
   sid,
   nbr,
@@ -113,33 +122,66 @@ export default class ModuleDbService {
   /**
    * @param ref
    */
-  public async getVersesByRef(ref: string): Promise<{
+  public async getSidsByRef(ref: string): Promise<string[]> {
+    const whereClause = mapBibleRefToSql(ref);
+
+    const db = await this.getDb();
+    const start = Date.now();
+
+    const sidResults = await db.select<{ sid: string }[]>(
+      `SELECT v.sid FROM verses v WHERE ${whereClause}`
+    );
+
+    let sids: string[] = [];
+    if (sidResults.length > 0) {
+      sids = sidResults.map((result) => result.sid);
+    }
+
+    console.log(`getSidsByRef ran in ${Date.now() - start}ms.`); // TODO: remove this
+
+    return sids;
+  }
+
+  /**
+   * @param ref
+   * @param index
+   */
+  public async getVersesByRef(
+    ref: string,
+    index: number = 0
+  ): Promise<{
     prev: Verse[];
     active: Verse | undefined;
     next: Verse[];
   }> {
     const whereClause = mapBibleRefToSql(ref);
+    const { limit, offset } = calcLimitAndOffsetWithButter(verseBuffer, index);
 
     const db = await this.getDb();
     const start = Date.now();
+
     const verseResults = await db.select<VerseRow[]>(
       `
-          SELECT v.id, v.sid, v.nbr, v.paragraph, v.children
+          SELECT row_number() over (order by id) - 1 as idx, v.id, v.sid, v.nbr, v.paragraph, v.children
           FROM verses v
-          WHERE ${whereClause}`
+          WHERE ${whereClause}
+          LIMIT ${limit} OFFSET ${offset}`
     );
+
     let active: Verse | undefined = undefined;
+    let prev: Verse[] = [];
     let next: Verse[] = [];
     if (verseResults.length > 0) {
-      const activeRow = verseResults[0];
+      const activeRow = verseResults.find((v) => v.idx === index);
       active = activeRow ? mapVerse(activeRow) : undefined;
       if (verseResults.length > 1) {
-        next = verseResults.slice(1).map(mapVerse);
+        prev = verseResults.filter((v) => v.idx < index).map(mapVerse);
+        next = verseResults.filter((v) => v.idx > index).map(mapVerse);
       }
     }
-    console.log(`sel ran in ${Date.now() - start}ms.`); // TODO: remove this
+    console.log(`getVersesByRef ran in ${Date.now() - start}ms.`); // TODO: remove this
 
-    return { prev: [], active, next };
+    return { prev, active, next }; // TODO: fix this
   }
 
   private async getDb(): Promise<Database> {

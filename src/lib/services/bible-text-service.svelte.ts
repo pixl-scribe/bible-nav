@@ -14,9 +14,12 @@ import ModuleDbService, {
 } from '$lib/services/module-db-service.svelte';
 
 export type GroupingMode = 'verse' | 'paragraph';
-const defaultSearch = 'GEN 1:1';
-const defaultSearchType: SearchType = 'ref-point';
-const defaultGroupingMode: GroupingMode = 'paragraph';
+//const defaultSearch = 'GEN 1:1';
+const defaultSearch = 'Gen.1.1-Gen.1.20';
+//const defaultSearchType: SearchType = 'ref-point';
+const defaultSearchType: SearchType = 'ref';
+//const defaultGroupingMode: GroupingMode = 'paragraph';
+const defaultGroupingMode: GroupingMode = 'verse';
 
 const verseCounts = rawVerseCounts as BibleVerseCounts;
 const allVerseCounts = { ...verseCounts.OT, ...verseCounts.NT };
@@ -31,23 +34,25 @@ export default class BibleTextService {
   private getTextDebounced = debounce(this.getText, 100);
   private _groupingMode = $state<GroupingMode>(defaultGroupingMode);
   private moduleDbService: ModuleDbService;
+  private _scrollPct = $state<number | undefined>(undefined);
 
   // This field is only modified by user search input.
   public searchInput = $state<string>('');
   public autoCompleteOptions = $state<AutoCompleteOption[]>([]);
   // These are modified both by controls and the search input.
-  public currentSearch = $state<string | undefined>(defaultSearch);
-  public currentSearchType = $state<SearchType | undefined>(defaultSearchType);
+  public currentSearch = $state<string>(defaultSearch);
+  public currentSearchType = $state<SearchType>(defaultSearchType);
   public prevParaBuffer = $state<Record<number, Verse[]>>({});
   public activePara = $state<Verse[]>([]);
   public nextParaBuffer = $state<Record<number, Verse[]>>({});
   public prevVerseBuffer = $state<Verse[]>([]);
   public activeVerse = $state<Verse | undefined>(undefined);
   public nextVerseBuffer = $state<Verse[]>([]);
+  public sids = $state<string[]>([]);
+  public sidIndex = $state<number>(0);
   public books = $state<Record<string, Book>>({});
   public scrollToSid = $state<string | undefined>();
   public selectInProgress = $state<boolean>(true);
-  public scrollPct = $state<number | undefined>(undefined);
   public adjustingScrollPct = $state<boolean>(false);
   public moduleName = $state<string>('');
   public referenceLabel = $state<string>('');
@@ -57,6 +62,7 @@ export default class BibleTextService {
     this.moduleDbService = new ModuleDbService(moduleId);
     this.getModule().then();
     this.getBooks().then();
+    this.getText(this.currentSearch, this.currentSearchType).then();
 
     // Watch search and search type.
     $effect(() => {
@@ -75,13 +81,31 @@ export default class BibleTextService {
       });
     });
 
+    // Watch scroll pct.
+    /**
+     * Watches scroll value and reloads text when it changes.
+     */
+    $effect(() => {
+      const newScrollValue = this.scrollPct;
+      untrack(() => {
+        switch (this.currentSearchType) {
+          case 'ref-point':
+            this.setSearchFromPct(newScrollValue);
+            break;
+          case 'ref':
+            this.setSearchWithinSidList(newScrollValue);
+            break;
+        }
+      });
+    });
+
     /**
      * Setting the scroll to the top after books load.
      */
     $effect(() => {
       // Need to wait for books to be read before setting the scroll value.
       if (this.books && Object.keys(this.books).length > 0) {
-        this.scrollPct = 0; // This sets the reference to GEN 1:1
+        this._scrollPct = 0; // This sets the reference to GEN 1:1
       }
     });
 
@@ -105,6 +129,27 @@ export default class BibleTextService {
     return this.groupingMode === 'paragraph' ? paraBuffer : verseBuffer;
   }
 
+  public get scrollPct() {
+    return this._scrollPct;
+  }
+
+  public set scrollPct(pct: number | undefined) {
+    switch (true) {
+      case this.currentSearchType === 'ref-point':
+        this._scrollPct = pct;
+        break;
+      case this.currentSearchType === 'ref':
+        this.setScrollPctRef(pct);
+        break;
+    }
+  }
+
+  private setScrollPctRef(pct: number | undefined): void {
+    if (this.sids.length <= 1 || !pct) return;
+    const stepSize = Math.max(Math.round(100 / (this.sids.length - 1)), 1);
+    this._scrollPct = Math.round(pct / stepSize) * stepSize;
+  }
+
   /**
    * Converts verse refs (e.g. 'GEN 1:1') to formatted ref (e.g. 'Genesis 1:1')
    */
@@ -125,9 +170,10 @@ export default class BibleTextService {
   }
 
   /**
-   * Called when the scrollbar changes position.
+   * Sets currentSearch based on percent of entire bible.
    */
-  public setReference(newScrollValue: number | undefined): void {
+  private setSearchFromPct(newScrollValue: number | undefined): void {
+    // don't do anything if pct is adjusting due to user scrolling
     if (this.adjustingScrollPct) {
       return;
     }
@@ -156,6 +202,29 @@ export default class BibleTextService {
       }
     }
     this.referenceLabel = '';
+  }
+
+  /**
+   * Sets currentSearch based on pct within a set of search result sids.
+   * buffer = 40 verses
+   */
+  private async setSearchWithinSidList(
+    newScrollValue: number | undefined
+  ): Promise<void> {
+    // don't do anything if pct is adjusting due to user scrolling
+    if (this.adjustingScrollPct) {
+      return;
+    }
+    if (newScrollValue === undefined || this.sids.length === 0) {
+      this.referenceLabel = '';
+      return;
+    }
+
+    const index = Math.round((this.sids.length - 1) * (newScrollValue / 100));
+    const sid = this.sids[index];
+    this.referenceLabel = this.formatAbbreviatedRefFromSid(sid);
+    this.sidIndex = index; // No need to change currentSearch here.
+    await this.getVersesByRefAndIndex(this.currentSearch, index);
   }
 
   public async moveActiveDownOne(): Promise<void> {
@@ -258,7 +327,7 @@ export default class BibleTextService {
     const { searchType, searchString } = parseSearch(searchLower);
 
     this.currentSearchType = searchType;
-    this.currentSearch = searchString;
+    this.currentSearch = searchString ?? defaultSearch;
   }
 
   private addReferenceAutoCompleteOptions(searchInput: string) {
@@ -354,7 +423,7 @@ export default class BibleTextService {
 
   private setScrollPositionFromMouseScrolling(verse: Verse): void {
     this.adjustingScrollPct = true;
-    this.scrollPct = (verse.id / verseCount) * 100;
+    this._scrollPct = (verse.id / verseCount) * 100;
     this.referenceLabel = this.formatAbbreviatedRefFromSid(verse.sid);
     setTimeout(() => {
       this.adjustingScrollPct = false;
@@ -369,6 +438,12 @@ export default class BibleTextService {
     this.books = await this.moduleDbService.getBooks();
   }
 
+  /**
+   * This is called anytime currentSearch changes, which includes manual scrolling as well scroll bar changes.
+   * @param currentSearch
+   * @param currentSearchType
+   * @private
+   */
   private async getText(
     currentSearch: string,
     currentSearchType: SearchType
@@ -387,6 +462,11 @@ export default class BibleTextService {
     }
   }
 
+  /**
+   * Search type is ref point with paragraph grouping.
+   * @param currentSearch
+   * @private
+   */
   private async getVersesByParagraphs(currentSearch: string): Promise<void> {
     const start = Date.now();
     this.getTextStart = start;
@@ -402,12 +482,18 @@ export default class BibleTextService {
       this.activePara = active;
       this.nextParaBuffer = next;
       this.scrollToSid = currentSearch; // Triggers scrollIntoView in paragraph.svelte
+      this.sids = [];
       this.prevVerseBuffer = [];
       this.activeVerse = undefined;
       this.nextVerseBuffer = [];
     }
   }
 
+  /**
+   * Search type is ref point with verse grouping.
+   * @param currentSearch
+   * @private
+   */
   private async getVerses(currentSearch: string): Promise<void> {
     const start = Date.now();
     this.getTextStart = start;
@@ -422,18 +508,60 @@ export default class BibleTextService {
       this.activeVerse = active;
       this.nextVerseBuffer = next;
       this.scrollToSid = currentSearch; // Triggers scrollIntoView in verse.svelte
+      this.sids = [];
       this.prevParaBuffer = {};
       this.activePara = [];
       this.nextParaBuffer = {};
     }
   }
 
+  /**
+   * Search type is ref from string search (verse grouping only).
+   * @param currentSearch
+   * @private
+   */
   private async getVersesByRef(currentSearch: string): Promise<void> {
     const start = Date.now();
     this.getTextStart = start;
 
-    const { prev, active, next } =
-      await this.moduleDbService.getVersesByRef(currentSearch);
+    const sidPromise = this.moduleDbService.getSidsByRef(currentSearch);
+    const versePromise = this.moduleDbService.getVersesByRef(currentSearch);
+    const [sids, verseResults] = await Promise.all([sidPromise, versePromise]);
+
+    const { prev, active, next } = verseResults;
+
+    // Only set results if this is the last call to getText.
+    if (this.getTextStart === start) {
+      this.prevVerseBuffer = prev;
+      this.activeVerse = active;
+      this.nextVerseBuffer = next;
+      this.sids = sids;
+      if (active) {
+        this.scrollToSid = active.sid; // Triggers scrollIntoView in verse.svelte
+      }
+      this.prevParaBuffer = {};
+      this.activePara = [];
+      this.nextParaBuffer = {};
+    }
+  }
+
+  /**
+   * Search type is ref from string search (verse grouping only) and sidIndex has changed.
+   * @param currentSearch
+   * @param sidIndex
+   * @private
+   */
+  private async getVersesByRefAndIndex(
+    currentSearch: string,
+    sidIndex: number
+  ): Promise<void> {
+    const start = Date.now();
+    this.getTextStart = start;
+
+    const { prev, active, next } = await this.moduleDbService.getVersesByRef(
+      currentSearch,
+      sidIndex
+    );
 
     // Only set results if this is the last call to getText.
     if (this.getTextStart === start) {

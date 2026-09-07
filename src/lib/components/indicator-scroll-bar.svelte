@@ -1,6 +1,5 @@
 <script lang="ts">
   import type BibleTextService from '$lib/services/bible-text-service.svelte.js';
-  import { untrack } from 'svelte';
 
   let { bibleTextService }: { bibleTextService: BibleTextService | undefined } =
     $props();
@@ -28,16 +27,6 @@
     window.removeEventListener('pointermove', updateValue);
     window.removeEventListener('pointerup', stopDragging);
   }
-
-  /**
-   * Watches scroll value and reloads text when it changes.
-   */
-  $effect(() => {
-    const newScrollValue = bibleTextService?.scrollPct;
-    untrack(() => {
-      bibleTextService?.setReference(newScrollValue);
-    });
-  });
 </script>
 
 <div class="flex justify-center flex-1 py-2">

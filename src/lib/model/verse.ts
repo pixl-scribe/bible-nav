@@ -36,6 +36,7 @@ export type VerseChild =
   string | GlossaryWord | TranslatorsAddition | Note | WordsOfJesus;
 
 export interface Verse {
+  idx: number;
   id: number;
   paragraph: number;
   sid: string;
@@ -44,6 +45,7 @@ export interface Verse {
 }
 
 export interface VerseRow {
+  idx: number;
   id: number;
   sid: string;
   nbr: number;
