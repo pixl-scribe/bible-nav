@@ -58,7 +58,7 @@ export default class BibleTextService {
   public books = $state<Record<string, Book>>({});
   public scrollToSid = $state<string | undefined>();
   public selectInProgress = $state<boolean>(true);
-  public adjustingScrollPctFromMouseWheel = $state<boolean>(false);
+  public adjustingScrollPct = $state<boolean>(false);
   public moduleName = $state<string>('');
   public referenceLabel = $state<string>('');
   public autoCompletePickInProgress = $state<boolean>(false);
@@ -93,7 +93,7 @@ export default class BibleTextService {
     $effect(() => {
       const newScrollValue = this.scrollPct;
       untrack(() => {
-        if (this.adjustingScrollPctFromMouseWheel) return;
+        if (this.adjustingScrollPct) return;
         switch (this.currentSearchType) {
           case 'ref-point':
             this.setSearchFromPct(newScrollValue);
@@ -179,8 +179,6 @@ export default class BibleTextService {
    * Sets currentSearch based on percent of entire bible.
    */
   private setSearchFromPct(newScrollValue: number | undefined): void {
-    if (this.selectInProgress) return;
-
     const books = this.books;
     if (newScrollValue === undefined || books === undefined) {
       this.referenceLabel = '';
@@ -220,17 +218,11 @@ export default class BibleTextService {
       return;
     }
 
-    console.log(
-      `inside setSearchWithinSidList, newScrollValue: ${newScrollValue}`
-    );
     const index = Math.round((this.sids.length - 1) * (newScrollValue / 100));
     const sid = this.sids[index];
     this.referenceLabel = this.formatAbbreviatedRefFromSid(sid);
-    console.log({ sid, index });
     this.sidIndex = index; // No need to change currentSearch here.
-    console.log('1. setSearchWithinSidList');
     await this.getVersesByRefAndIndexDebounced(this.currentSearch, index);
-    console.log(this.activeVerse?.sid);
   }
 
   public async moveActiveDownOne(): Promise<void> {
@@ -368,7 +360,6 @@ export default class BibleTextService {
     const keys = Object.keys(this.nextParaBuffer);
     if (keys.length === 0) return;
 
-    this.selectInProgress = true;
     const nextParaNumber = parseInt(keys[0]);
     const { prev, active, next } =
       await this.moduleDbService.getVersesByParagraphs(nextParaNumber);
@@ -378,9 +369,8 @@ export default class BibleTextService {
     this.nextParaBuffer = next;
     const firstVerse = active?.[0];
     if (firstVerse) {
-      this.setScrollPositionFromMouseWheel(firstVerse);
+      this.setScrollPosition(firstVerse);
     }
-    this.selectInProgress = false;
   }
 
   private async moveActiveUpOnePara(): Promise<void> {
@@ -396,7 +386,7 @@ export default class BibleTextService {
     this.nextParaBuffer = next;
     const firstVerse = active?.[0];
     if (firstVerse) {
-      this.setScrollPositionFromMouseWheel(firstVerse);
+      this.setScrollPosition(firstVerse);
     }
   }
 
@@ -413,13 +403,12 @@ export default class BibleTextService {
     } else {
       if (this.sidIndex < this.sids.length - 1) {
         this.sidIndex = this.sidIndex + 1;
-        console.log('2. moveActiveDownOneVerse...');
         await this.getVersesByRefAndIndex(this.currentSearch, this.sidIndex);
       }
     }
 
     if (this.activeVerse) {
-      this.setScrollPositionFromMouseWheel(this.activeVerse);
+      this.setScrollPosition(this.activeVerse);
     }
   }
 
@@ -437,27 +426,25 @@ export default class BibleTextService {
     } else {
       if (this.sidIndex > 0) {
         this.sidIndex = this.sidIndex - 1;
-        console.log('3. moveActiveUpOneVerse...');
         await this.getVersesByRefAndIndex(this.currentSearch, this.sidIndex);
       }
     }
 
     if (this.activeVerse) {
-      this.setScrollPositionFromMouseWheel(this.activeVerse);
+      this.setScrollPosition(this.activeVerse);
     }
   }
 
-  private setScrollPositionFromMouseWheel(verse: Verse): void {
-    this.adjustingScrollPctFromMouseWheel = true;
+  private setScrollPosition(verse: Verse): void {
+    this.adjustingScrollPct = true;
     if (this.currentSearchType === 'ref-point') {
       this._scrollPct = (verse.id / verseCount) * 100;
     } else {
       this._scrollPct = (this.sidIndex / (this.sids.length - 1)) * 100;
-      console.log(`new pct: ${this._scrollPct}`);
     }
     this.referenceLabel = this.formatAbbreviatedRefFromSid(verse.sid);
     setTimeout(() => {
-      this.adjustingScrollPctFromMouseWheel = false;
+      this.adjustingScrollPct = false;
     }, 500);
   }
 
@@ -520,6 +507,10 @@ export default class BibleTextService {
       this.nextVerseBuffer = [];
     }
 
+    if (this.activePara?.[0]) {
+      this.setScrollPosition(this.activePara[0]);
+    }
+
     setTimeout(() => {
       this.selectInProgress = false;
     }, selectInProgressTimeout);
@@ -549,6 +540,10 @@ export default class BibleTextService {
       this.prevParaBuffer = {};
       this.activePara = [];
       this.nextParaBuffer = {};
+    }
+
+    if (this.activeVerse) {
+      this.setScrollPosition(this.activeVerse);
     }
 
     setTimeout(() => {
@@ -584,6 +579,10 @@ export default class BibleTextService {
       this.prevParaBuffer = {};
       this.activePara = [];
       this.nextParaBuffer = {};
+    }
+
+    if (this.activeVerse) {
+      this.setScrollPosition(this.activeVerse);
     }
 
     setTimeout(() => {
