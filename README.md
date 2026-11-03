@@ -23,20 +23,29 @@ Bible Nav is a cross-platform Bible desktop application built to be
 
 ## Dev Steps
 
+Requires a stable [Rust toolchain](https://rustup.rs/).
+
 ```
-npm run tauri dev    # runs app in dev mode
-npm run lint         # lints the typescript
-npm run pseudolocale # regenerate the locales/en-XA.json pseudo locale file for i18n testing
-npm run copy-db      # copy and compress default kjv sqlite DB to resources folder
+cargo run                    # runs app in dev mode
+cargo test                   # runs unit tests
+cargo clippy -- -D warnings  # lints the Rust code
+cargo fmt                    # formats the Rust code
 ```
 
 ## Build Steps
 
 ```
-NO_STRIP=true npm run tauri build
+cargo build --release
 ```
 
-The compiled executable can be found in `src-tauri/target/release`
+The compiled executable can be found at `target/release/bible-nav`
 
-## Run Steps
+## License
 
+Bible Nav is freely given ("freely ye have received, freely give", Matthew 10:8).
+It is licensed under [MIT No Attribution (MIT-0)](https://choosealicense.com/licenses/mit-0/),
+so you can copy, translate, modify, and distribute it without restriction
+and without needing to ask permission. See [LICENSE](LICENSE).
+
+In the spirit of [Let's copy, church](https://copy.church/dedicate/), this
+project is offered for the free use of the church.
