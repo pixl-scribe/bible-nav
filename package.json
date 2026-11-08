@@ -15,7 +15,7 @@
     "pseudolocale": "pseudolocale --readFile src/locales/en-US.json --writeFile src/locales/en-XA.json -S '{' -E '}'",
     "copy-db": "zsh ./scripts/copy-db.zsh"
   },
-  "license": "MIT",
+  "license": "MIT-0",
   "dependencies": {
     "@lucide/svelte": "^1.42.0",
     "@tailwindcss/vite": "^4.3.3",

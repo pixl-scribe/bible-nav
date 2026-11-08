@@ -40,3 +40,12 @@ The compiled executable can be found in `src-tauri/target/release`
 
 ## Run Steps
 
+## License
+
+Bible Nav is freely given ("freely ye have received, freely give", Matthew 10:8).
+It is licensed under [MIT No Attribution (MIT-0)](https://choosealicense.com/licenses/mit-0/),
+so you can copy, translate, modify, and distribute it without restriction
+and without needing to ask permission. See [LICENSE](LICENSE).
+
+In the spirit of [Let's copy, church](https://copy.church/dedicate/), this
+project is offered for the free use of the church.
