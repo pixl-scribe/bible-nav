@@ -2,6 +2,8 @@
 
 // mod migrations;
 // use crate::migrations::migration_factory::MigrationFactory;
+mod modules;
+
 use tauri::Manager;
 use std::fs::{File, create_dir_all};
 use std::io::copy;
@@ -46,10 +48,23 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
+        // Modules are opened into this registry by Rust code only. The page
+        // reads them through the commands below. See src/modules/.
+        .manage(modules::commands::ModuleRegistry::default())
+        .invoke_handler(tauri::generate_handler![
+            modules::commands::module_info,
+            modules::commands::books,
+            modules::commands::paragraph_window,
+            modules::commands::paragraph_window_at_sid,
+            modules::commands::verse_window,
+            modules::commands::verse_window_at_sid,
+            modules::commands::ref_sids,
+            modules::commands::ref_verses,
+        ])
         .setup(|app| {
             let app_handle = app.handle();
             // Trigger extraction
-            init_database(&app_handle).unwrap();
+            init_database(app_handle).unwrap();
             Ok(())
         })
         .run(tauri::generate_context!())
