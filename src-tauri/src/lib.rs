@@ -23,7 +23,14 @@ fn init_database(app_handle: &tauri::AppHandle) -> Result<(), String> {
     println!("The db path is: {}", db_path.display());
 
     if !db_path.exists() {
-        let resource_path = app_handle.path().resolve("resources/eng_kjv.db.gz", tauri::path::BaseDirectory::Resource).unwrap();
+        // Transitional (removed in Phase 3): the bundled file is now named
+        // with its version, eng_kjv-<version>.db.gz.
+        let resources = app_handle.path().resolve("resources", tauri::path::BaseDirectory::Resource).map_err(|e| e.to_string())?;
+        let resource_path = std::fs::read_dir(&resources)
+            .map_err(|e| e.to_string())?
+            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+            .find(|path| path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("eng_kjv-") && n.ends_with(".db.gz")))
+            .ok_or("no bundled eng_kjv module")?;
 
         println!("The resource path is: {}", resource_path.display());
 
@@ -48,9 +55,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         // Modules are opened into this registry by Rust code only. The page
         // reads them through the commands below. See src/modules/.
         .manage(modules::commands::ModuleRegistry::default())
+        .manage(modules::folder::FolderState::default())
         .invoke_handler(tauri::generate_handler![
             modules::commands::module_info,
             modules::commands::books,
@@ -60,10 +69,18 @@ pub fn run() {
             modules::commands::verse_window_at_sid,
             modules::commands::ref_sids,
             modules::commands::ref_verses,
+            modules::folder::modules_folder_status,
+            modules::folder::dismiss_modules_folder_notice,
+            modules::folder::change_modules_folder,
+            modules::folder::rescan_modules,
         ])
         .setup(|app| {
             let app_handle = app.handle();
-            // Trigger extraction
+            // Choose the visible modules folder, install the bundled module
+            // there, and open its modules for the page.
+            modules::folder::initialize(app_handle);
+            // The page still reads its text from the old hidden copy until it
+            // switches to the module commands. Remove this then.
             init_database(app_handle).unwrap();
             Ok(())
         })

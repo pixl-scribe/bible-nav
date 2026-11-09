@@ -30,6 +30,7 @@ flate2 = "1.1.9"
 # Kept at 0.32 while tauri-plugin-sql is still installed: both must use the
 # same libsqlite3-sys version. Update once the plugin is removed.
 rusqlite = { version = "0.32.1", features = ["bundled"] }
+tauri-plugin-dialog = "2"
 
 [dev-dependencies]
 tempfile = "3"

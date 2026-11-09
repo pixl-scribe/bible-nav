@@ -1,6 +1,7 @@
 {
   "common.app-name": "Bible Nav",
   "common.close": "Close",
+  "common.ok": "OK",
   "main.new-search": "New Search",
   "bible-text.search": "Search",
   "bible-text.add-parallel": "Add Parallel Text",
@@ -23,9 +24,14 @@
   "settings.groupBy": "Group Text By",
   "settings.groupBy.paragraph": "Paragraph",
   "settings.groupBy.verse": "Verse",
+  "settings.modules-folder": "Bible Modules Folder",
+  "settings.modules-folder.portable": "This is a portable copy, so its modules are kept in a folder next to the app.",
   "left-nav.modules": "Modules",
   "left-nav.settings": "Settings",
   "left-nav.about": "About",
   "about.version-label": "Version",
-  "about.copyright": "Bible Nav Copyright © {copyrightYear} pixl-scribe. Bible Nav is freely given under the MIT No Attribution (MIT-0) license: you may copy, translate, modify, and distribute it without restriction. This software is distributed with NO WARRANTY. View the full license at:"
+  "about.copyright": "Bible Nav Copyright © {copyrightYear} pixl-scribe. Bible Nav is freely given under the MIT No Attribution (MIT-0) license: you may copy, translate, modify, and distribute it without restriction. This software is distributed with NO WARRANTY. View the full license at:",
+  "modules-folder.notice": "Your Bible modules are stored in {folder}, where you can find, back up, and share them.",
+  "modules-folder.change": "Change Folder…",
+  "modules-folder.problems": "Problems with the Bible modules folder"
 }

@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "test": "vitest --watch=false",
     "pseudolocale": "pseudolocale --readFile src/locales/en-US.json --writeFile src/locales/en-XA.json -S '{' -E '}'",
-    "copy-db": "zsh ./scripts/copy-db.zsh"
+    "copy-db": "zsh ./scripts/copy-db.zsh",
+    "start-fresh": "node ./scripts/start-fresh.mjs"
   },
   "license": "MIT-0",
   "dependencies": {

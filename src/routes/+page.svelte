@@ -5,6 +5,7 @@
   import LeftNav from '$lib/components/left-nav.svelte';
   import { _ } from 'svelte-i18n';
   import BibleText from '$lib/components/bible-text.svelte';
+  import ModulesFolderNotice from '$lib/components/modules-folder-notice.svelte';
 
   const openTexts = $state<string[]>(['eng_kjv']);
 
@@ -25,6 +26,7 @@
     <Plus size={16} />
     <BookSearch />
   </button>
+  <ModulesFolderNotice />
 </main>
 
 <style>

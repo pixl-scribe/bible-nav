@@ -22,6 +22,8 @@ pub struct ModuleInfo {
     pub name: String,
     pub description: String,
     pub module_type: String,
+    /// The module's id, such as "eng_kjv".
+    pub fetch_id: Option<String>,
     pub language: String,
     pub language_code: String,
     pub license: String,
@@ -147,7 +149,7 @@ fn heading_from_row(row: &Row) -> rusqlite::Result<HeadingRow> {
 
 pub fn module_info(conn: &Connection) -> Result<ModuleInfo> {
     let info = conn.query_row(
-        "SELECT name, description, moduleType, language, languageCode, license, version, formatVersion
+        "SELECT name, description, moduleType, fetchId, language, languageCode, license, version, formatVersion
          FROM module",
         [],
         |row| {
@@ -155,11 +157,12 @@ pub fn module_info(conn: &Connection) -> Result<ModuleInfo> {
                 name: row.get(0)?,
                 description: row.get(1)?,
                 module_type: row.get(2)?,
-                language: row.get(3)?,
-                language_code: row.get(4)?,
-                license: row.get(5)?,
-                version: row.get(6)?,
-                format_version: row.get(7)?,
+                fetch_id: row.get(3)?,
+                language: row.get(4)?,
+                language_code: row.get(5)?,
+                license: row.get(6)?,
+                version: row.get(7)?,
+                format_version: row.get(8)?,
             })
         },
     )?;

@@ -11,6 +11,8 @@ use std::fmt;
 pub enum ModuleError {
     /// SQLite reported an error, such as an unreadable or corrupt file.
     Sqlite(rusqlite::Error),
+    /// A file or folder couldn't be read, written, or moved.
+    Io(std::io::Error),
     /// The file isn't a module this app can read. Holds the reason.
     Unsupported(String),
     /// A verse reference wasn't found in the module.
@@ -25,6 +27,7 @@ impl fmt::Display for ModuleError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ModuleError::Sqlite(error) => write!(f, "database error: {error}"),
+            ModuleError::Io(error) => write!(f, "file error: {error}"),
             ModuleError::Unsupported(reason) => write!(f, "unsupported module: {reason}"),
             ModuleError::NotFound(what) => write!(f, "not found: {what}"),
             ModuleError::UnknownModule(id) => write!(f, "no open module with id \"{id}\""),
@@ -39,6 +42,13 @@ impl std::error::Error for ModuleError {}
 impl From<rusqlite::Error> for ModuleError {
     fn from(error: rusqlite::Error) -> Self {
         ModuleError::Sqlite(error)
+    }
+}
+
+/// Lets `?` turn a file error into a `ModuleError` automatically.
+impl From<std::io::Error> for ModuleError {
+    fn from(error: std::io::Error) -> Self {
+        ModuleError::Io(error)
     }
 }
 

@@ -9,6 +9,7 @@
   } from '$lib/services/app-settings-service.svelte.js';
   import { onMount } from 'svelte';
   import type { GroupingMode } from '$lib/services/bible-text-service.svelte.js';
+  import { moduleFolderService } from '$lib/services/module-folder-service.svelte';
 
   let appSettings = $state<AppSettings | undefined>(undefined);
 
@@ -35,8 +36,13 @@
     }
   }
 
+  const folderStatus = $derived(moduleFolderService.status);
+
   onMount(async () => {
     appSettings = await appSettingsService.getSettings();
+    if (!moduleFolderService.status) {
+      await moduleFolderService.load();
+    }
   });
 </script>
 
@@ -96,5 +102,32 @@
         >{$_(`settings.groupBy.verse`)}</option
       >
     </select>
+  </fieldset>
+
+  <fieldset class="fieldset">
+    <legend class="fieldset-legend">{$_('settings.modules-folder')}</legend>
+    {#if folderStatus?.portable}
+      <p class="label whitespace-normal">
+        {$_('settings.modules-folder.portable')}
+      </p>
+    {/if}
+    <p class="text-sm break-all">{folderStatus?.folder ?? ''}</p>
+    {#if folderStatus && !folderStatus.portable}
+      <button
+        class="btn btn-sm self-start"
+        disabled={moduleFolderService.changing}
+        onclick={() => moduleFolderService.changeFolder()}
+      >
+        {$_('modules-folder.change')}
+      </button>
+    {/if}
+    {#if moduleFolderService.error}
+      <p class="text-error text-xs whitespace-normal">
+        {moduleFolderService.error}
+      </p>
+    {/if}
+    {#each folderStatus?.problems ?? [] as problem, index (index)}
+      <p class="text-warning text-xs whitespace-normal">{problem}</p>
+    {/each}
   </fieldset>
 </div>

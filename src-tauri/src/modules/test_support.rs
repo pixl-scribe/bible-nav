@@ -13,11 +13,25 @@ use super::db::ModuleDb;
 
 static FIXTURE: OnceLock<(TempDir, PathBuf)> = OnceLock::new();
 
-/// The path to a decompressed copy of `resources/eng_kjv.db.gz`.
+/// The bundled KJV module, `resources/eng_kjv-<version>.db.gz`.
+pub fn bundled_kjv_gz() -> PathBuf {
+    let resources = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources");
+    std::fs::read_dir(&resources)
+        .expect("resources folder")
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .find(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("eng_kjv-") && name.ends_with(".db.gz"))
+        })
+        .expect("a bundled eng_kjv-<version>.db.gz")
+}
+
+/// The path to a decompressed copy of the bundled KJV module.
 pub fn fixture_path() -> PathBuf {
     FIXTURE
         .get_or_init(|| {
-            let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/eng_kjv.db.gz");
+            let source = bundled_kjv_gz();
             let dir = tempfile::tempdir().expect("temporary folder");
             let path = dir.path().join("eng_kjv.db");
             let mut decoder = GzDecoder::new(File::open(source).expect("bundled module"));

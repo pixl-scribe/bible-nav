@@ -37,17 +37,16 @@ pub struct ModuleRegistry {
 impl ModuleRegistry {
     /// Opens and checks a module, then makes it available under `id`.
     /// Only Rust code calls this; the page has no command that opens files.
-    // Only the tests call this until the module store (Phase 2) does. `expect`
-    // silences the "never used" warning in app builds now, and warns once it's
-    // no longer true, so this line gets removed then.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "called by the module store, added in Phase 2")
-    )]
     pub fn open(&self, id: &str, path: &Path) -> Result<()> {
         let db = ModuleDb::open(path)?;
         let mut modules = self.lock_map()?;
         modules.insert(id.to_string(), Arc::new(Mutex::new(db)));
+        Ok(())
+    }
+
+    /// Closes every module, before reopening them from a new folder.
+    pub fn clear(&self) -> Result<()> {
+        self.lock_map()?.clear();
         Ok(())
     }
 
