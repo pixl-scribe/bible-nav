@@ -1,0 +1,47 @@
+{
+  "_source": "Copied from bible-nav-modules/exports/eng_kjv.db (format version 1). raw is the module's own plain text, so rendered text must equal it.",
+  "verses": [
+    {
+      "sid": "GEN 4:10",
+      "raw": "And he said, What hast thou done? the voice of thy brother’s blood crieth unto me from the ground.",
+      "children": "[\"And he \",{\"style\":\"w\",\"strong\":\"H0559\",\"txt\":\"said\"},\", \",{\"style\":\"w\",\"strong\":\"H4100\",\"txt\":\"What\"},\" hast thou \",{\"style\":\"w\",\"strong\":\"H6213\",\"txt\":\"done\"},\"? the \",{\"style\":\"w\",\"strong\":\"H6963\",\"txt\":\"voice\"},\" of thy \",{\"style\":\"w\",\"strong\":\"H0251\",\"txt\":\"brother’s\"},\" \",{\"style\":\"w\",\"strong\":\"H1818\",\"txt\":\"blood\"},\" \",{\"style\":\"w\",\"strong\":\"H6817\",\"txt\":\"crieth\"},\" unto me from the \",{\"style\":\"w\",\"strong\":\"H0127\",\"txt\":\"ground\"},\".\",{\"style\":\"f\",\"children\":[{\"style\":\"fr\",\"children\":[\"4.10\"]},{\"style\":\"ft\",\"children\":[\"blood: Heb. bloods\"]}]}]"
+    },
+    {
+      "sid": "EXO 6:2",
+      "raw": "And God spake unto Moses, and said unto him, I am the LORD:",
+      "children": "[\"And \",{\"style\":\"w\",\"strong\":\"H0430\",\"txt\":\"God\"},\" \",{\"style\":\"w\",\"strong\":\"H1696\",\"txt\":\"spake\"},\" unto \",{\"style\":\"w\",\"strong\":\"H4872\",\"txt\":\"Moses\"},\", and \",{\"style\":\"w\",\"strong\":\"H0559\",\"txt\":\"said\"},\" unto him, I \",{\"style\":\"add\",\"children\":[\"am\"]},\" the \",{\"style\":\"nd\",\"children\":[{\"style\":\"w\",\"strong\":\"H3068\",\"txt\":\"LORD\"}]},\":\",{\"style\":\"f\",\"children\":[{\"style\":\"fr\",\"children\":[\"6.2\"]},{\"style\":\"ft\",\"children\":[\"the \",{\"style\":\"nd\",\"children\":[\"LORD\"]},\": or, \",{\"style\":\"nd\",\"children\":[\"JEHOVAH\"]}]}]}]"
+    },
+    {
+      "sid": "EXO 15:13",
+      "raw": "Thou in thy mercy hast led forth the people which thou hast redeemed: thou hast guided them in thy strength unto thy holy habitation.",
+      "children": "[\"Thou in thy \",{\"style\":\"w\",\"strong\":\"H2617\",\"txt\":\"mercy\"},\" hast led \",{\"style\":\"w\",\"strong\":\"H5148\",\"txt\":\"forth\"},\" the \",{\"style\":\"w\",\"strong\":\"H5971\",\"txt\":\"people\"},\" \",{\"style\":\"add\",\"children\":[{\"style\":\"w\",\"strong\":\"H2098\",\"txt\":\"which\"}]},\" thou hast \",{\"style\":\"w\",\"strong\":\"H1350\",\"txt\":\"redeemed\"},\": thou hast \",{\"style\":\"w\",\"strong\":\"H5095\",\"txt\":\"guided\"},\" \",{\"style\":\"add\",\"children\":[\"them\"]},\" in thy \",{\"style\":\"w\",\"strong\":\"H5797\",\"txt\":\"strength\"},\" unto thy \",{\"style\":\"w\",\"strong\":\"H6944\",\"txt\":\"holy\"},\" \",{\"style\":\"w\",\"strong\":\"H5116\",\"txt\":\"habitation\"},\".\"]"
+    },
+    {
+      "sid": "PSA 23:1",
+      "raw": "The LORD is my shepherd; I shall not want.",
+      "children": "[\"The \",{\"style\":\"nd\",\"children\":[{\"style\":\"w\",\"strong\":\"H3068\",\"txt\":\"LORD\"}]},\" \",{\"style\":\"add\",\"children\":[\"is\"]},\" my \",{\"style\":\"w\",\"strong\":\"H7462\",\"txt\":\"shepherd\"},\"; I shall not \",{\"style\":\"w\",\"strong\":\"H2637\",\"txt\":\"want\"},\".\"]"
+    },
+    {
+      "sid": "MAT 26:59",
+      "raw": "Now the chief priests, and elders, and all the council, sought false witness against Jesus, to put him to death;",
+      "children": "[{\"style\":\"w\",\"strong\":\"G1161\",\"txt\":\"Now\"},\" the chief \",{\"style\":\"w\",\"strong\":\"G0749\",\"txt\":\"priests\"},\", \",{\"style\":\"w\",\"strong\":\"G2532\",\"txt\":\"and\"},\" \",{\"style\":\"w\",\"strong\":\"G4245\",\"txt\":\"elders\"},\", \",{\"style\":\"w\",\"strong\":\"G2532\",\"txt\":\"and\"},\" \",{\"style\":\"w\",\"strong\":\"G3650\",\"txt\":\"all\"},\" the \",{\"style\":\"w\",\"strong\":\"G4892\",\"txt\":\"council\"},\", \",{\"style\":\"w\",\"strong\":\"G2212\",\"txt\":\"sought\"},\" false \",{\"style\":\"w\",\"strong\":\"G5577\",\"txt\":\"witness\"},\" \",{\"style\":\"w\",\"strong\":\"G2596\",\"txt\":\"against\"},\" \",{\"style\":\"w\",\"strong\":\"G2424\",\"txt\":\"Jesus\"},\", \",{\"style\":\"w\",\"strong\":\"G3704\",\"txt\":\"to\"},\" \",{\"style\":\"w\",\"strong\":\"G2289\",\"txt\":\"put\"},\" \",{\"style\":\"w\",\"strong\":\"G0846\",\"txt\":\"him\"},\" to \",{\"style\":\"w\",\"strong\":\"G2289\",\"txt\":\"death\"},\";\"]"
+    },
+    {
+      "sid": "JHN 3:16",
+      "raw": "¶ For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.",
+      "children": "[{\"style\":\"wj\",\"children\":[\"¶ \",{\"style\":\"w\",\"strong\":\"G1063\",\"txt\":\"For\"},\" \",{\"style\":\"w\",\"strong\":\"G2316\",\"txt\":\"God\"},\" \",{\"style\":\"w\",\"strong\":\"G3779\",\"txt\":\"so\"},\" \",{\"style\":\"w\",\"strong\":\"G0025\",\"txt\":\"loved\"},\" \",{\"style\":\"w\",\"strong\":\"G2889\",\"txt\":\"the world\"},\", \",{\"style\":\"w\",\"strong\":\"G5620\",\"txt\":\"that\"},\" \",{\"style\":\"w\",\"strong\":\"G1325\",\"txt\":\"he gave\"},\" \",{\"style\":\"w\",\"strong\":\"G0846\",\"txt\":\"his\"},\" \",{\"style\":\"w\",\"strong\":\"G3439\",\"txt\":\"only begotten\"},\" \",{\"style\":\"w\",\"strong\":\"G5207\",\"txt\":\"Son\"},\", \",{\"style\":\"w\",\"strong\":\"G2443\",\"txt\":\"that\"},\" \",{\"style\":\"w\",\"strong\":\"G3956\",\"txt\":\"whosoever\"},\" \",{\"style\":\"w\",\"strong\":\"G4100\",\"txt\":\"believeth\"},\" \",{\"style\":\"w\",\"strong\":\"G1519\",\"txt\":\"in\"},\" \",{\"style\":\"w\",\"strong\":\"G0846\",\"txt\":\"him\"},\" \",{\"style\":\"w\",\"strong\":\"G0622\",\"txt\":\"should\"},\" \",{\"style\":\"w\",\"strong\":\"G3361\",\"txt\":\"not\"},\" \",{\"style\":\"w\",\"strong\":\"G0622\",\"txt\":\"perish\"},\", \",{\"style\":\"w\",\"strong\":\"G0235\",\"txt\":\"but\"},\" \",{\"style\":\"w\",\"strong\":\"G2192\",\"txt\":\"have\"},\" \",{\"style\":\"w\",\"strong\":\"G0166\",\"txt\":\"everlasting\"},\" \",{\"style\":\"w\",\"strong\":\"G2222\",\"txt\":\"life\"},\".\"]}]"
+    }
+  ],
+  "headings": [
+    {
+      "style": "d",
+      "raw": "A Psalm of David, when he fled from Absalom his son.",
+      "children": "[\"A \",{\"style\":\"w\",\"strong\":\"H4210\",\"txt\":\"Psalm\"},\" of \",{\"style\":\"w\",\"strong\":\"H1732\",\"txt\":\"David\"},\", when he \",{\"style\":\"w\",\"strong\":\"H1272\",\"txt\":\"fled\"},\" \",{\"style\":\"w\",\"strong\":\"H6440\",\"txt\":\"from\"},\" \",{\"style\":\"w\",\"strong\":\"H0053\",\"txt\":\"Absalom\"},\" his \",{\"style\":\"w\",\"strong\":\"H1121\",\"txt\":\"son\"},\".\"]"
+    },
+    {
+      "style": "s1",
+      "raw": "א ALEPH.",
+      "children": "[{\"style\":\"tl\",\"children\":[\"א ALEPH.\"]}]"
+    }
+  ]
+}

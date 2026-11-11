@@ -26,4 +26,3 @@ export function parseSearch(search: string): SearchRequest {
     searchString: search,
   };
 }
-

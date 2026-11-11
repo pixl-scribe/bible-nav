@@ -2,7 +2,7 @@
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
   import { getVersion } from '@tauri-apps/api/app';
-  import { open } from '@tauri-apps/plugin-shell';
+  import { openUrl } from '@tauri-apps/plugin-opener';
 
   let { dialog = $bindable() }: { dialog: HTMLDialogElement | undefined } =
     $props();
@@ -23,7 +23,7 @@
 
   async function openLicense(event: MouseEvent) {
     event.preventDefault();
-    await open(licenseUrl);
+    await openUrl(licenseUrl);
   }
 
   onMount(async () => {

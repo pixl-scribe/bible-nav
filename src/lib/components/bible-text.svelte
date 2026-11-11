@@ -94,26 +94,33 @@
   class="flex flex-col bg-base-200 rounded-xl w-full flex-1 max-w-140 ml-1 h-full items-start"
 >
   <SearchRow {bibleTextService} />
+  {#if bibleTextService?.loadError}
+    <div role="alert" class="alert alert-error m-2 whitespace-normal">
+      {bibleTextService.loadError}
+    </div>
+  {/if}
   <div class="flex w-full pt-2 pl-2 pb-2">
     <div
-      class="flex flex-col h-[calc(100vh-104px)] w-full overflow-y-auto text-lg leading-relaxed scrollable-region"
+      class="flex flex-col h-[calc(100vh-104px)] w-full overflow-y-auto overflow-x-hidden text-lg leading-relaxed scrollable-region"
       bind:this={scrollableElement}
     >
       {#if bibleTextService?.groupingMode === 'paragraph' && bibleTextService?.currentSearchType !== 'ref'}
-        {#each Object.entries(bibleTextService?.prevParaBuffer ?? {}) as [paraIndex, verses], i (paraIndex)}
+        {#each bibleTextService?.prevParaBuffer ?? [] as paragraph, i (paragraph.id)}
           <div bind:this={prevElements[i]}>
-            <Paragraph {verses} {bibleTextService} />
+            <Paragraph {paragraph} {bibleTextService} />
           </div>
         {/each}
         <div bind:this={activeElement}>
-          <Paragraph
-            verses={bibleTextService?.activePara ?? []}
-            {bibleTextService}
-          />
+          {#if bibleTextService?.activePara}
+            <Paragraph
+              paragraph={bibleTextService.activePara}
+              {bibleTextService}
+            />
+          {/if}
         </div>
-        {#each Object.entries(bibleTextService?.nextParaBuffer ?? {}) as [paraIndex, verses], i (paraIndex)}
+        {#each bibleTextService?.nextParaBuffer ?? [] as paragraph, i (paragraph.id)}
           <div bind:this={nextElements[i]}>
-            <Paragraph {verses} {bibleTextService} />
+            <Paragraph {paragraph} {bibleTextService} />
           </div>
         {/each}
       {:else}

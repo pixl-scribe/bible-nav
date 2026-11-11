@@ -1,208 +1,183 @@
-import Database from '@tauri-apps/plugin-sql';
-import { appDataDir } from '@tauri-apps/api/path';
-import type { Verse, VerseChild, VerseRow } from '$lib/model/verse';
+import { invoke } from '@tauri-apps/api/core';
 import type { Book } from '$lib/model/book';
-import { mapBibleRefToSql } from '$lib/services/map-bible-ref-to-sql';
-import { calcLimitAndOffsetWithButter } from '$lib/services/calc-limit-and-offset'; // requires svelte service
+import type {
+  Heading,
+  HeadingRow,
+  Inline,
+  Paragraph,
+  ParagraphRow,
+  Verse,
+  VerseRow,
+} from '$lib/model/verse';
+import { calcLimitAndOffsetWithButter } from '$lib/services/calc-limit-and-offset';
+import { osisToRanges, type RefRange } from '$lib/services/osis-to-ranges';
+import { parseChildren } from '$lib/services/verse-content';
 
+/** Paragraphs kept on each side of the active one. */
 export const paraBuffer = 20;
+/** Verses kept on each side of the active one. */
 export const verseBuffer = 40;
 
-const mapVerse = ({
-  idx,
-  id,
-  sid,
-  nbr,
-  paragraph,
-  children,
-}: VerseRow): Verse => ({
-  idx,
-  id,
-  sid,
-  nbr,
-  paragraph,
-  children: JSON.parse(children) as VerseChild[],
-});
+/** The active item, with the items before and after it, in reading order. */
+export interface TextWindow<T> {
+  prev: T[];
+  active: T | undefined;
+  next: T[];
+}
 
+interface ModuleInfo {
+  name: string;
+  version: string;
+  formatVersion: number;
+}
+
+interface ParagraphWindowRow {
+  center: number;
+  paragraphs: ParagraphRow[];
+}
+
+interface VerseWindowRow {
+  center: number;
+  verses: VerseRow[];
+  headings: HeadingRow[];
+}
+
+function toHeading(row: HeadingRow): Heading {
+  return { ...row, children: parseChildren<Inline>(row.children) };
+}
+
+function toVerse(row: VerseRow, headings: Heading[] = []): Verse {
+  return { ...row, children: parseChildren(row.children), headings };
+}
+
+function toParagraph(row: ParagraphRow): Paragraph {
+  return {
+    ...row,
+    heading: row.heading ? toHeading(row.heading) : undefined,
+    verses: row.verses.map((verse) => toVerse(verse)),
+  };
+}
+
+function split<T>(items: T[], position: (item: T) => number): TextWindow<T> {
+  return {
+    prev: items.filter((item) => position(item) < 0),
+    active: items.find((item) => position(item) === 0),
+    next: items.filter((item) => position(item) > 0),
+  };
+}
+
+/**
+ * Reads one module through the Rust commands in src-tauri/src/modules. The
+ * page never opens database files or builds SQL itself.
+ */
 export default class ModuleDbService {
-  private db: Database | undefined;
-
   constructor(private moduleId: string) {}
 
   public async getModuleName(): Promise<string> {
-    const db = await this.getDb();
-    const moduleRows = await db.select<{ name: string }[]>(
-      'SELECT name FROM module'
-    );
-    return moduleRows?.[0]?.name ?? '';
+    const info = await invoke<ModuleInfo>('module_info', {
+      moduleId: this.moduleId,
+    });
+    return info.name;
   }
 
   public async getBooks(): Promise<Record<string, Book>> {
-    const db = await this.getDb();
-    const books = await db.select<Book[]>('SELECT * FROM books');
+    const books = await invoke<Book[]>('books', { moduleId: this.moduleId });
     return Object.fromEntries(books.map((book) => [book.code, book]));
   }
 
-  public async getParagraphIdBySid(verseSid: string): Promise<number> {
-    const db = await this.getDb();
-    const result = await db.select<{ paragraph: number }[]>(
-      'SELECT paragraph FROM verses WHERE sid = $1',
-      [verseSid]
-    );
-    return result?.[0]?.paragraph ?? 0;
+  /** The paragraphs around the one holding verse `sid`. */
+  public async getParagraphsAtSid(sid: string): Promise<TextWindow<Paragraph>> {
+    const window = await invoke<ParagraphWindowRow>('paragraph_window_at_sid', {
+      moduleId: this.moduleId,
+      sid,
+      before: paraBuffer,
+      after: paraBuffer,
+    });
+    return this.paragraphWindow(window);
   }
 
-  public async getVersesByParagraphs(paraId: number): Promise<{
-    prev: Record<number, Verse[]>;
-    active: Verse[];
-    next: Record<number, Verse[]>;
-  }> {
-    const fromPara = paraId - paraBuffer;
-    const thruPara = paraId + paraBuffer;
-
-    const db = await this.getDb();
-    const start = Date.now();
-    const verseResults = await db.select<VerseRow[]>(
-      `
-          SELECT v.id, v.sid, v.nbr, v.paragraph, v.children
-          FROM verses v
-          WHERE v.paragraph BETWEEN $1 AND $2`,
-      [fromPara, thruPara]
-    );
-    console.log(`sel ran in ${Date.now() - start}ms.`); // TODO: remove this
-
-    const prev = Object.groupBy(
-      verseResults.filter((v) => v.paragraph < paraId).map(mapVerse),
-      (v) => v.paragraph
-    ) as Record<string, Verse[]>;
-    const active = verseResults
-      .filter((v) => v.paragraph === paraId)
-      .map(mapVerse);
-    const next = Object.groupBy(
-      verseResults.filter((v) => v.paragraph > paraId).map(mapVerse),
-      (v) => v.paragraph
-    ) as Record<string, Verse[]>;
-    return { prev, active, next };
+  /** The paragraphs around paragraph `paragraphId`. */
+  public async getParagraphs(
+    paragraphId: number
+  ): Promise<TextWindow<Paragraph>> {
+    const window = await invoke<ParagraphWindowRow>('paragraph_window', {
+      moduleId: this.moduleId,
+      center: paragraphId,
+      before: paraBuffer,
+      after: paraBuffer,
+    });
+    return this.paragraphWindow(window);
   }
 
-  public async getVerseIdBySid(verseSid: string): Promise<number> {
-    const db = await this.getDb();
-    const result = await db.select<{ id: number }[]>(
-      'SELECT id FROM verses WHERE sid = $1',
-      [verseSid]
-    );
-    return result?.[0]?.id ?? 0;
+  /** The verses around verse `sid`, each with any headings shown before it. */
+  public async getVersesAtSid(sid: string): Promise<TextWindow<Verse>> {
+    const window = await invoke<VerseWindowRow>('verse_window_at_sid', {
+      moduleId: this.moduleId,
+      sid,
+      before: verseBuffer,
+      after: verseBuffer,
+    });
+    return this.verseWindow(window);
   }
 
-  public async getVerses(verseId: number): Promise<{
-    prev: Verse[];
-    active: Verse | undefined;
-    next: Verse[];
-  }> {
-    const fromVerse = verseId - verseBuffer;
-    const thruVerse = verseId + verseBuffer;
+  /** The verses around verse `verseId`. */
+  public async getVerses(verseId: number): Promise<TextWindow<Verse>> {
+    const window = await invoke<VerseWindowRow>('verse_window', {
+      moduleId: this.moduleId,
+      center: verseId,
+      before: verseBuffer,
+      after: verseBuffer,
+    });
+    return this.verseWindow(window);
+  }
 
-    const db = await this.getDb();
-    const start = Date.now();
-    const verseResults = await db.select<VerseRow[]>(
-      `
-          SELECT v.id, v.sid, v.nbr, v.paragraph, v.children
-          FROM verses v
-          WHERE v.id BETWEEN $1 AND $2`,
-      [fromVerse, thruVerse]
-    );
-    console.log(`sel ran in ${Date.now() - start}ms.`); // TODO: remove this
-    const prev = verseResults.filter((v) => v.id < verseId).map(mapVerse);
-    const activeRow = verseResults.find((v) => v.id === verseId);
-    const active = activeRow ? mapVerse(activeRow) : undefined;
-    const next = verseResults.filter((v) => v.id > verseId).map(mapVerse);
-    return { prev, active, next };
+  /** Every verse sid in an OSIS reference such as 'John.3.16-John.3.18'. */
+  public async getSidsByRef(osisRef: string): Promise<string[]> {
+    const ranges = osisToRanges(osisRef);
+    if (ranges.length === 0) return [];
+    return invoke<string[]>('ref_sids', { moduleId: this.moduleId, ranges });
   }
 
   /**
-   * @param ref
-   */
-  public async getSidsByRef(ref: string): Promise<string[]> {
-    const whereClause = mapBibleRefToSql(ref);
-
-    const db = await this.getDb();
-    const start = Date.now();
-
-    const sidResults = await db.select<{ sid: string }[]>(
-      `SELECT v.sid FROM verses v WHERE ${whereClause}`
-    );
-
-    let sids: string[] = [];
-    if (sidResults.length > 0) {
-      sids = sidResults.map((result) => result.sid);
-    }
-
-    console.log(`getSidsByRef ran in ${Date.now() - start}ms.`); // TODO: remove this
-
-    return sids;
-  }
-
-  /**
-   * @param ref
-   * @param index
+   * The verses around result number `index` within an OSIS reference, as
+   * `prev`, `active`, and `next` by their position in the results.
    */
   public async getVersesByRef(
-    ref: string,
+    osisRef: string,
     index: number = 0
-  ): Promise<{
-    prev: Verse[];
-    active: Verse | undefined;
-    next: Verse[];
-  }> {
-    const whereClause = mapBibleRefToSql(ref);
+  ): Promise<TextWindow<Verse>> {
+    const ranges: RefRange[] = osisToRanges(osisRef);
+    if (ranges.length === 0) return { prev: [], active: undefined, next: [] };
     const { limit, offset } = calcLimitAndOffsetWithButter(verseBuffer, index);
-
-    const db = await this.getDb();
-    const start = Date.now();
-
-    const verseResults = await db.select<VerseRow[]>(
-      `
-          SELECT row_number() over (order by id) - 1 as idx, v.id, v.sid, v.nbr, v.paragraph, v.children
-          FROM verses v
-          WHERE ${whereClause}
-          LIMIT ${limit} OFFSET ${offset}`
+    const rows = await invoke<VerseRow[]>('ref_verses', {
+      moduleId: this.moduleId,
+      ranges,
+      offset,
+      limit,
+    });
+    return split(
+      rows.map((row) => toVerse(row)),
+      (verse) => (verse.idx ?? 0) - index
     );
-
-    let active: Verse | undefined = undefined;
-    let prev: Verse[] = [];
-    let next: Verse[] = [];
-    if (verseResults.length > 0) {
-      const activeRow = verseResults.find((v) => v.idx === index);
-      active = activeRow ? mapVerse(activeRow) : undefined;
-      if (verseResults.length > 1) {
-        prev = verseResults.filter((v) => v.idx < index).map(mapVerse);
-        next = verseResults.filter((v) => v.idx > index).map(mapVerse);
-      }
-    }
-    console.log(`getVersesByRef ran in ${Date.now() - start}ms.`); // TODO: remove this
-
-    return { prev, active, next }; // TODO: fix this
   }
 
-  private async getDb(): Promise<Database> {
-    if (this.db !== undefined) {
-      return this.db;
-    }
-    const dbPath = await this.getDbPath();
-    try {
-      this.db = await Database.load(dbPath);
-      await this.db.execute('PRAGMA query_only = 1');
-      await this.db.execute('PRAGMA journal_mode = OFF');
-      await this.db.execute('PRAGMA synchronous = OFF');
-      return this.db;
-    } catch (err) {
-      console.error(`Error connecting to ${dbPath}`, err);
-      throw err;
-    }
+  private paragraphWindow(window: ParagraphWindowRow): TextWindow<Paragraph> {
+    return split(
+      window.paragraphs.map(toParagraph),
+      (paragraph) => paragraph.id - window.center
+    );
   }
 
-  private async getDbPath(): Promise<string> {
-    const appData = await appDataDir();
-    return `sqlite:${appData}/modules/${this.moduleId}.db?immutable=1&mode=ro`;
+  private verseWindow(window: VerseWindowRow): TextWindow<Verse> {
+    // A heading shown before verse n has afterVerseId = n - 1.
+    const headingsBefore: Record<number, Heading[]> = {};
+    for (const heading of window.headings.map(toHeading)) {
+      const verseId = heading.afterVerseId + 1;
+      headingsBefore[verseId] = [...(headingsBefore[verseId] ?? []), heading];
+    }
+    return split(
+      window.verses.map((row) => toVerse(row, headingsBefore[row.id])),
+      (verse) => verse.id - window.center
+    );
   }
 }
