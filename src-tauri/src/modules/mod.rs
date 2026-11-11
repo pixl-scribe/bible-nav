@@ -1,6 +1,8 @@
 //! Reading Bible modules: read-only SQLite files made by bible-nav-modules.
 //!
 //! - `db`: opens and checks module files.
+//! - `integrity`: checks a module's signed manifest before it's opened.
+//! - `keys`: the public keys this app trusts.
 //! - `queries`: the queries the app runs, with bound parameters.
 //! - `commands`: the Tauri commands the web page calls.
 //! - `store`: the visible modules folder on disk.
@@ -11,6 +13,8 @@ pub mod commands;
 pub mod db;
 pub mod error;
 pub mod folder;
+pub mod integrity;
+pub mod keys;
 pub mod queries;
 pub mod store;
 

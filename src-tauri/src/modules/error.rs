@@ -15,6 +15,9 @@ pub enum ModuleError {
     Io(std::io::Error),
     /// The file isn't a module this app can read. Holds the reason.
     Unsupported(String),
+    /// The module isn't signed by a trusted key, or doesn't match its signed
+    /// manifest. Holds the reason.
+    Untrusted(String),
     /// A verse reference wasn't found in the module.
     NotFound(String),
     /// No module with this id is open.
@@ -29,6 +32,7 @@ impl fmt::Display for ModuleError {
             ModuleError::Sqlite(error) => write!(f, "database error: {error}"),
             ModuleError::Io(error) => write!(f, "file error: {error}"),
             ModuleError::Unsupported(reason) => write!(f, "unsupported module: {reason}"),
+            ModuleError::Untrusted(reason) => write!(f, "untrusted module: {reason}"),
             ModuleError::NotFound(what) => write!(f, "not found: {what}"),
             ModuleError::UnknownModule(id) => write!(f, "no open module with id \"{id}\""),
             ModuleError::Task(reason) => write!(f, "query task failed: {reason}"),

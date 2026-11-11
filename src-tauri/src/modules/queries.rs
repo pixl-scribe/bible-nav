@@ -534,7 +534,10 @@ mod tests {
     fn reads_module_info() {
         let info = module_info(kjv().conn()).unwrap();
         assert_eq!(info.name, "King James Version (1769)");
-        assert_eq!(info.format_version, 1);
+        assert_eq!(
+            info.format_version,
+            crate::modules::db::SUPPORTED_FORMAT_VERSION
+        );
     }
 
     #[test]

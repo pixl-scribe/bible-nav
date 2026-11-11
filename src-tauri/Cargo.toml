@@ -27,6 +27,20 @@ tauri-plugin-store = "2.4.3"
 flate2 = "1.1.9"
 rusqlite = { version = "0.41", features = ["bundled"] }
 tauri-plugin-dialog = "2"
+ed25519-dalek = "2"
+sha2 = "0.10"
+base64 = "0.22"
 
 [dev-dependencies]
 tempfile = "3"
+
+# Development builds check every module's SHA-256 too. Optimizing just these
+# crates keeps that fast without slowing down every build.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.dev.package.ed25519-dalek]
+opt-level = 3
+
+[profile.dev.package.curve25519-dalek]
+opt-level = 3

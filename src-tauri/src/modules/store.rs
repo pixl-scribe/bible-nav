@@ -16,6 +16,8 @@ use flate2::read::GzDecoder;
 
 use super::db::ModuleDb;
 use super::error::{ModuleError, Result};
+use super::integrity::{self, Sidecars};
+use super::keys;
 use super::queries;
 
 /// The folder name used inside Documents (or the home folder).
@@ -31,13 +33,22 @@ Bible Nav modules
 The .db files in this folder are Bible modules for Bible Nav
 (https://github.com/pixl-scribe/bible-nav). Each one holds a Bible text in
 an ordinary SQLite database, named by module and version: for example,
-eng_kjv-1.0.0.db is the King James Version (1769).
+eng_kjv-1.1.0.db is the King James Version (1769).
+
+Each module comes with two small files of the same name:
+eng_kjv-1.1.0.manifest.json describes it, including the SHA-256 hash of the
+whole .db file, and eng_kjv-1.1.0.manifest.sig holds the signature that
+vouches for it. Keep all three together: Bible Nav opens a module only if
+its manifest is signed by a key it trusts and the file matches it exactly,
+so a damaged or altered copy is refused.
 
 You're welcome to copy and share these files, to keep God's word in many
 hands. Bible Nav opens them read-only and never changes them.
 
-Bible Nav checks each module's format when it opens it. Checking that a
-module's text hasn't been altered is planned for a future version.
+To check a copy yourself, compare the output of `sha256sum` (or
+`certutil -hashfile <file> SHA256` on Windows) with \"sha256\" in the
+manifest. How to check the signature is explained in integrity-spec.md in
+https://github.com/pixl-scribe/bible-nav-modules.
 ";
 
 /// Where modules live, and whether this is a portable copy.
@@ -102,7 +113,9 @@ pub enum InstallOutcome {
 
 /// Installs one bundled module, a gzip file named `<id>-<version>.db.gz`,
 /// into the folder as `<id>-<version>.db`, uncompressed, so people can open
-/// it with ordinary SQLite tools. Never overwrites a valid existing copy.
+/// it with ordinary SQLite tools, with its manifest and signatures, which
+/// are bundled beside it uncompressed. Never overwrites a valid existing
+/// copy.
 ///
 /// The version is in the bundled file's name, so startup can see a copy is
 /// already installed without unpacking anything. When it does install, it
@@ -118,7 +131,8 @@ pub fn install_bundled(bundled_gz: &Path, folder: &Path) -> Result<InstallOutcom
     // Unpack to a hidden temporary file, then rename it into place, so a
     // half-written module never appears under a real name.
     let temp = folder.join(".installing-module.tmp");
-    let result = unpack_and_place(bundled_gz, &temp, &target, &file_name);
+    let bundled = integrity::sidecars(&bundled_gz.with_extension(""));
+    let result = unpack_and_place(bundled_gz, &bundled, &temp, &target, &file_name);
     if temp.exists() {
         let _ = fs::remove_file(&temp);
     }
@@ -127,6 +141,7 @@ pub fn install_bundled(bundled_gz: &Path, folder: &Path) -> Result<InstallOutcom
 
 fn unpack_and_place(
     bundled_gz: &Path,
+    bundled: &Sidecars,
     temp: &Path,
     target: &Path,
     file_name: &str,
@@ -134,9 +149,10 @@ fn unpack_and_place(
     let mut decoder = GzDecoder::new(File::open(bundled_gz)?);
     io::copy(&mut decoder, &mut File::create(temp)?)?;
 
-    // The block ends here, so the module is closed before it's renamed.
+    // Checked against the bundled manifest before it's put in place. The
+    // block ends here, so the module is closed before it's renamed.
     {
-        let db = ModuleDb::open(temp)?;
+        let db = ModuleDb::open_checked(temp, bundled, file_name, &keys::trusted_module_keys())?;
         let actual = module_file_name(&queries::module_info(db.conn())?)?;
         if actual != file_name {
             return Err(ModuleError::Unsupported(format!(
@@ -146,17 +162,24 @@ fn unpack_and_place(
     }
 
     // The target was checked above: if it exists, it failed to open.
-    if target.exists() {
+    let set_aside = if target.exists() {
         let set_aside = target.with_extension("db.rejected");
         fs::rename(target, &set_aside)?;
-        fs::rename(temp, target)?;
-        return Ok(InstallOutcome::ReplacedInvalid {
+        Some(set_aside)
+    } else {
+        None
+    };
+    let placed = integrity::sidecars(target);
+    fs::copy(&bundled.manifest, &placed.manifest)?;
+    fs::copy(&bundled.signatures, &placed.signatures)?;
+    fs::rename(temp, target)?;
+    Ok(match set_aside {
+        Some(set_aside) => InstallOutcome::ReplacedInvalid {
             path: target.to_path_buf(),
             set_aside,
-        });
-    }
-    fs::rename(temp, target)?;
-    Ok(InstallOutcome::Installed(target.to_path_buf()))
+        },
+        None => InstallOutcome::Installed(target.to_path_buf()),
+    })
 }
 
 /// `eng_kjv-1.0.0.db` from a bundled file named `eng_kjv-1.0.0.db.gz`.
@@ -175,7 +198,8 @@ fn bundled_target_name(bundled_gz: &Path) -> Result<String> {
         })
 }
 
-/// Installs every bundled module (`*.db.gz`) found in `resources`. Each
+/// Installs every bundled module (`*.db.gz`, with its manifest and
+/// signatures) found in `resources`. Each
 /// file's result is returned separately, so one bad file doesn't stop the
 /// others.
 pub fn install_all_bundled(
@@ -332,9 +356,10 @@ pub struct MoveReport {
     pub left_behind: Vec<String>,
 }
 
-/// Moves every valid module from one folder to another. A module is only
-/// removed from the old folder once its new copy has opened successfully.
-/// Files that aren't modules, and the README, are left where they are.
+/// Moves every valid module, with its manifest and signatures, from one
+/// folder to another. A module is only removed from the old folder once its
+/// new copy has opened successfully. Files that aren't modules, and the
+/// README, are left where they are.
 pub fn move_modules(from: &Path, to: &Path) -> Result<MoveReport> {
     let mut report = MoveReport::default();
     if !from.is_dir() || same_folder(from, to) {
@@ -355,15 +380,30 @@ pub fn move_modules(from: &Path, to: &Path) -> Result<MoveReport> {
             report.left_behind.push(name);
             continue;
         }
+        let (from, to) = (integrity::sidecars(&source), integrity::sidecars(&target));
+        let pairs = [
+            (source.as_path(), target.as_path()),
+            (from.manifest.as_path(), to.manifest.as_path()),
+            (from.signatures.as_path(), to.signatures.as_path()),
+        ];
         // Renaming is instant on the same drive. Across drives it fails, so
         // copy instead, and check the copy before removing the original.
-        if fs::rename(&source, &target).is_ok() {
+        if fs::rename(pairs[0].0, pairs[0].1).is_ok() {
+            for (from, to) in &pairs[1..] {
+                fs::rename(from, to)?;
+            }
             report.moved.push(name);
-        } else if fs::copy(&source, &target).is_ok() && ModuleDb::open(&target).is_ok() {
-            fs::remove_file(&source)?;
+        } else if pairs.iter().all(|(from, to)| fs::copy(from, to).is_ok())
+            && ModuleDb::open(&target).is_ok()
+        {
+            for (from, _) in pairs {
+                fs::remove_file(from)?;
+            }
             report.moved.push(name);
         } else {
-            let _ = fs::remove_file(&target);
+            for (_, to) in pairs {
+                let _ = fs::remove_file(to);
+            }
             report.left_behind.push(name);
         }
     }
@@ -380,11 +420,23 @@ fn same_folder(a: &Path, b: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::modules::test_support::{bundled_kjv_gz, fixture_path};
+    use crate::modules::test_support::{bundled_kjv_gz, copy_module, fixture_path};
     use std::io::Write;
 
     fn bundled_gz() -> PathBuf {
         bundled_kjv_gz()
+    }
+
+    /// Copies the bundled module and its manifest and signatures into
+    /// `folder` as `<name>.db.gz`, `<name>.manifest.json`, and so on.
+    fn bundle_as(folder: &Path, name: &str) -> PathBuf {
+        let gz = folder.join(format!("{name}.db.gz"));
+        fs::copy(bundled_gz(), &gz).unwrap();
+        let from = integrity::sidecars(&bundled_gz().with_extension(""));
+        let to = integrity::sidecars(&gz.with_extension(""));
+        fs::copy(from.manifest, to.manifest).unwrap();
+        fs::copy(from.signatures, to.signatures).unwrap();
+        gz
     }
 
     fn kjv_file_name() -> String {
@@ -442,6 +494,8 @@ mod tests {
         let expected = folder.path().join(kjv_file_name());
         assert_eq!(outcome, InstallOutcome::Installed(expected.clone()));
         assert!(ModuleDb::open(&expected).is_ok());
+        let placed = integrity::sidecars(&expected);
+        assert!(placed.manifest.exists() && placed.signatures.exists());
         assert!(!folder.path().join(".installing-module.tmp").exists());
     }
 
@@ -479,7 +533,7 @@ mod tests {
     #[test]
     fn skips_unpacking_when_a_valid_copy_exists() {
         let folder = tempfile::tempdir().unwrap();
-        fs::copy(fixture_path(), folder.path().join(kjv_file_name())).unwrap();
+        copy_module(&fixture_path(), folder.path());
         // A bundled file with the same name but unreadable contents: if the
         // installer tried to unpack it, this would fail.
         let bundled = tempfile::tempdir().unwrap();
@@ -496,12 +550,14 @@ mod tests {
     #[test]
     fn refuses_a_bundled_file_whose_name_does_not_match_its_contents() {
         let bundled = tempfile::tempdir().unwrap();
-        let misnamed = bundled.path().join("eng_kjv-9.9.9.db.gz");
-        fs::copy(bundled_gz(), &misnamed).unwrap();
+        let misnamed = bundle_as(bundled.path(), "eng_kjv-9.9.9");
         let folder = tempfile::tempdir().unwrap();
 
         let error = install_bundled(&misnamed, folder.path()).unwrap_err();
-        assert!(error.to_string().contains("holds eng_kjv-"), "{error}");
+        assert!(
+            error.to_string().contains("not eng_kjv-9.9.9.db"),
+            "{error}"
+        );
         assert!(!folder.path().join("eng_kjv-9.9.9.db").exists());
         assert!(!folder.path().join(".installing-module.tmp").exists());
     }
@@ -517,11 +573,7 @@ mod tests {
     #[test]
     fn installs_every_bundled_module() {
         let resources = tempfile::tempdir().unwrap();
-        fs::copy(
-            bundled_gz(),
-            resources.path().join(format!("{}.gz", kjv_file_name())),
-        )
-        .unwrap();
+        bundle_as(resources.path(), kjv_file_name().trim_end_matches(".db"));
         fs::write(resources.path().join("notes.txt"), "not a module").unwrap();
         let folder = tempfile::tempdir().unwrap();
 
@@ -617,6 +669,8 @@ mod tests {
         assert!(report.left_behind.is_empty());
         assert!(ModuleDb::open(&target.join(kjv_file_name())).is_ok());
         assert!(!old.path().join(kjv_file_name()).exists());
+        let left = integrity::sidecars(&old.path().join(kjv_file_name()));
+        assert!(!left.manifest.exists() && !left.signatures.exists());
         assert!(old.path().join("notes.db").exists());
         assert!(old.path().join("README.txt").exists());
     }
