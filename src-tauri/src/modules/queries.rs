@@ -61,6 +61,13 @@ pub struct VerseRow {
     /// page can letter them (a, b, ... restarting each chapter) even when
     /// the loaded text starts partway through a chapter.
     pub note_start: u32,
+    /// Headings shown just before this verse, such as a Psalm title before
+    /// verse 1. Filled in for verse-by-verse text (verse windows and
+    /// reference results); paragraph windows carry headings as paragraphs.
+    pub headings_before: Vec<HeadingRow>,
+    /// Headings shown just after this verse, such as an epistle's closing
+    /// note after its last verse.
+    pub headings_after: Vec<HeadingRow>,
 }
 
 #[derive(Debug, Serialize)]
@@ -98,13 +105,12 @@ pub struct ParagraphWindow {
     pub paragraphs: Vec<ParagraphRow>,
 }
 
-/// The verses around `center`, plus the headings that fall among them.
+/// The verses around `center`, each with its headings.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerseWindow {
     pub center: i64,
     pub verses: Vec<VerseRow>,
-    pub headings: Vec<HeadingRow>,
 }
 
 /// A verse or a range of verses, given by sids such as "JHN 3:16".
@@ -137,6 +143,8 @@ fn verse_from_row(row: &Row) -> rusqlite::Result<VerseRow> {
         sid: row.get(5)?,
         children: row.get(6)?,
         note_start: 0,
+        headings_before: Vec::new(),
+        headings_after: Vec::new(),
     })
 }
 
@@ -198,6 +206,49 @@ fn notes_before(conn: &Connection, verse: &VerseRow) -> Result<u32> {
         total += count_notes(&children?);
     }
     Ok(total)
+}
+
+/// Gives each verse the headings shown just before or after it.
+///
+/// A heading's `afterVerseId` is the verse it follows in the module, which
+/// may be in an earlier chapter: a Psalm title follows the previous psalm's
+/// last verse. So a heading goes before the next verse if that verse is in
+/// the heading's own chapter (a Psalm title before verse 1), and otherwise
+/// after the verse it follows (an epistle's closing note after its last
+/// verse). Verses may be any selection, such as reference results with gaps.
+fn attach_headings(conn: &Connection, verses: &mut [VerseRow]) -> Result<()> {
+    let (Some(first), Some(last)) = (
+        verses.iter().map(|verse| verse.id).min(),
+        verses.iter().map(|verse| verse.id).max(),
+    ) else {
+        return Ok(());
+    };
+    // Where each verse is in `verses`, by verse id.
+    let index: std::collections::HashMap<i64, usize> = verses
+        .iter()
+        .enumerate()
+        .map(|(position, verse)| (verse.id, position))
+        .collect();
+    let in_chapter = |verse: &VerseRow, heading: &HeadingRow| {
+        verse.book_id == heading.book_id && verse.chapter == heading.chapter
+    };
+
+    let mut statement = conn.prepare(&format!(
+        "SELECT {HEADING_COLUMNS} FROM headings WHERE afterVerseId BETWEEN ?1 AND ?2 ORDER BY id"
+    ))?;
+    let headings = statement
+        .query_map(params![first - 1, last], heading_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    for heading in headings {
+        let next = index.get(&(heading.after_verse_id + 1)).copied();
+        let previous = index.get(&heading.after_verse_id).copied();
+        if let Some(position) = next.filter(|&p| in_chapter(&verses[p], &heading)) {
+            verses[position].headings_before.push(heading);
+        } else if let Some(position) = previous.filter(|&p| in_chapter(&verses[p], &heading)) {
+            verses[position].headings_after.push(heading);
+        }
+    }
+    Ok(())
 }
 
 fn heading_from_row(row: &Row) -> rusqlite::Result<HeadingRow> {
@@ -366,20 +417,8 @@ pub fn verse_window(
         .query_map(params![from, to], verse_from_row)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     assign_note_starts(conn, verses.iter_mut())?;
-
-    // A heading shown before verse n has afterVerseId = n - 1.
-    let mut statement = conn.prepare(&format!(
-        "SELECT {HEADING_COLUMNS} FROM headings WHERE afterVerseId BETWEEN ?1 AND ?2 ORDER BY id"
-    ))?;
-    let headings = statement
-        .query_map(params![from - 1, to - 1], heading_from_row)?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-
-    Ok(VerseWindow {
-        center,
-        verses,
-        headings,
-    })
+    attach_headings(conn, &mut verses)?;
+    Ok(VerseWindow { center, verses })
 }
 
 /// Turns reference ranges into verse-id ranges, failing if a sid is unknown.
@@ -447,6 +486,7 @@ pub fn ref_verses(
         .query_map(params_from_iter(values), verse_from_row)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     assign_note_starts(conn, verses.iter_mut())?;
+    attach_headings(conn, &mut verses)?;
     Ok(verses
         .into_iter()
         .zip(i64::from(offset)..)
@@ -558,16 +598,77 @@ mod tests {
         assert_eq!(window.paragraphs[0].verses[0].sid, "GEN 1:1");
     }
 
+    /// The styles of the headings before and after each verse, by sid.
+    fn heading_places<'a>(
+        verses: impl IntoIterator<Item = &'a VerseRow>,
+    ) -> Vec<(String, Vec<&'a str>, Vec<&'a str>)> {
+        verses
+            .into_iter()
+            .map(|verse| {
+                (
+                    verse.sid.clone(),
+                    verse
+                        .headings_before
+                        .iter()
+                        .map(|h| h.style.as_str())
+                        .collect(),
+                    verse
+                        .headings_after
+                        .iter()
+                        .map(|h| h.style.as_str())
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
     #[test]
-    fn verse_window_includes_headings_before_its_verses() {
+    fn verse_window_puts_a_psalm_title_before_verse_1() {
         let db = kjv();
         let psalm_3_1 = verse_id_for_sid(db.conn(), "PSA 3:1").unwrap();
         let window = verse_window(db.conn(), psalm_3_1, 1, 1).unwrap();
-        let sids: Vec<&str> = window.verses.iter().map(|v| v.sid.as_str()).collect();
-        assert_eq!(sids, ["PSA 2:12", "PSA 3:1", "PSA 3:2"]);
-        assert_eq!(window.headings.len(), 1);
-        assert_eq!(window.headings[0].after_verse_id, psalm_3_1 - 1);
-        assert_eq!(window.headings[0].style, "d");
+        assert_eq!(
+            heading_places(&window.verses),
+            [
+                ("PSA 2:12".into(), vec![], vec![]),
+                ("PSA 3:1".into(), vec!["d"], vec![]),
+                ("PSA 3:2".into(), vec![], vec![]),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_closing_note_follows_its_own_chapter() {
+        let db = kjv();
+        let last = verse_id_for_sid(db.conn(), "ROM 16:27").unwrap();
+        let window = verse_window(db.conn(), last, 0, 1).unwrap();
+        // Not before the next book's first verse.
+        assert_eq!(
+            heading_places(&window.verses),
+            [
+                ("ROM 16:27".into(), vec![], vec!["s1"]),
+                ("1CO 1:1".into(), vec![], vec![]),
+            ]
+        );
+    }
+
+    #[test]
+    fn reference_results_carry_their_headings() {
+        let db = kjv();
+        let page = ref_verses(db.conn(), &[range("PSA 3:1", Some("PSA 3:2"))], 0, 10).unwrap();
+        assert_eq!(
+            heading_places(page.iter().map(|v| &v.verse)),
+            [
+                ("PSA 3:1".into(), vec!["d"], vec![]),
+                ("PSA 3:2".into(), vec![], vec![])
+            ]
+        );
+        // A search that starts after verse 1 leaves the title out.
+        let page = ref_verses(db.conn(), &[range("PSA 3:2", None)], 0, 10).unwrap();
+        assert!(page[0].verse.headings_before.is_empty());
+        // A closing note shows after the last verse of its epistle.
+        let page = ref_verses(db.conn(), &[range("ROM 16:27", None)], 0, 10).unwrap();
+        assert_eq!(page[0].verse.headings_after.len(), 1);
     }
 
     #[test]

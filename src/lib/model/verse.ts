@@ -64,8 +64,14 @@ export interface Verse {
   children: VerseChild[];
   /** How many footnotes come before this verse in its chapter. */
   noteStart: number;
-  /** Headings shown just before this verse (verse grouping mode). */
-  headings: Heading[];
+  /**
+   * Headings shown just before this verse, such as a Psalm title before
+   * verse 1, and just after it, such as an epistle's closing note. Rust
+   * places them by the heading's own chapter. Verse-by-verse text only;
+   * paragraph text carries headings as paragraphs.
+   */
+  headingsBefore: Heading[];
+  headingsAfter: Heading[];
 }
 
 /**
@@ -100,6 +106,8 @@ export interface VerseRow {
   sid: string;
   children: string;
   noteStart: number;
+  headingsBefore: HeadingRow[];
+  headingsAfter: HeadingRow[];
 }
 
 export interface HeadingRow {

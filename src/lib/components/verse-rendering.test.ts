@@ -28,7 +28,8 @@ function toVerse(sample: (typeof samples.verses)[number]): Verse {
     sid: sample.sid,
     children: letterNotes(parseChildren(sample.children), 0),
     noteStart: 0,
-    headings: [],
+    headingsBefore: [],
+    headingsAfter: [],
   };
 }
 

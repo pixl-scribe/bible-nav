@@ -44,18 +44,18 @@ interface ParagraphWindowRow {
 interface VerseWindowRow {
   center: number;
   verses: VerseRow[];
-  headings: HeadingRow[];
 }
 
 function toHeading(row: HeadingRow): Heading {
   return { ...row, children: parseChildren<Inline>(row.children) };
 }
 
-function toVerse(row: VerseRow, headings: Heading[] = []): Verse {
+function toVerse(row: VerseRow): Verse {
   return {
     ...row,
     children: letterNotes(parseChildren(row.children), row.noteStart),
-    headings,
+    headingsBefore: row.headingsBefore.map(toHeading),
+    headingsAfter: row.headingsAfter.map(toHeading),
   };
 }
 
@@ -196,14 +196,8 @@ export default class ModuleDbService {
   }
 
   private verseWindow(window: VerseWindowRow): TextWindow<Verse> {
-    // A heading shown before verse n has afterVerseId = n - 1.
-    const headingsBefore: Record<number, Heading[]> = {};
-    for (const heading of window.headings.map(toHeading)) {
-      const verseId = heading.afterVerseId + 1;
-      headingsBefore[verseId] = [...(headingsBefore[verseId] ?? []), heading];
-    }
     return split(
-      window.verses.map((row) => toVerse(row, headingsBefore[row.id])),
+      window.verses.map(toVerse),
       (verse) => verse.id - window.center
     );
   }

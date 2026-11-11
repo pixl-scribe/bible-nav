@@ -27,16 +27,24 @@
   );
 </script>
 
-{#each verse.headings as heading (heading.id)}
-  <HeadingText {heading} />
-{/each}
-<p
-  class={[
-    className,
-    'my-1 rounded-sm',
-    bibleTextService?.highlightSid === verse.sid && 'pair-highlight',
-  ]}
->
-  <span class="text-xs text-base-content/60" id={verse.sid}>{label}</span
-  >{' '}<VerseText {verse} />
-</p>
+<!-- The verse's id is on this wrapper, so going to a verse shows the
+     headings before it, such as a Psalm title, instead of scrolling past. -->
+<div id={verse.sid}>
+  {#each verse.headingsBefore as heading (heading.id)}
+    <HeadingText {heading} />
+  {/each}
+  <p
+    class={[
+      className,
+      'my-1 rounded-sm',
+      bibleTextService?.highlightSid === verse.sid && 'pair-highlight',
+    ]}
+  >
+    <span class="text-xs text-base-content/60">{label}</span>{' '}<VerseText
+      {verse}
+    />
+  </p>
+  {#each verse.headingsAfter as heading (heading.id)}
+    <HeadingText {heading} />
+  {/each}
+</div>
