@@ -214,7 +214,8 @@ export default class BibleTextService {
     return `${book.toc2} ${verseRef}`;
   }
 
-  private formatAbbreviatedRefFromSid(sid: string) {
+  /** Like formatRefFromSid, with the book's short name: 'Gen 1:1'. */
+  public formatAbbreviatedRefFromSid(sid: string) {
     const [bookId, verseRef] = sid.split(' ');
     if (!bookId || !verseRef) return '';
     const book = this.books[bookId];
