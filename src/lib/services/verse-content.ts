@@ -41,3 +41,36 @@ export function noteText(note: Note): string {
     .filter((text) => text !== '')
     .join(' ');
 }
+
+/**
+ * The footnote letter for a 0-based position within a chapter: a..z, then
+ * aa..az, ba..bz, and so on, like spreadsheet columns.
+ */
+export function footnoteLetter(index: number): string {
+  let letters = '';
+  let n = index + 1;
+  while (n > 0) {
+    const remainder = (n - 1) % 26;
+    letters = String.fromCharCode(97 + remainder) + letters;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letters;
+}
+
+/**
+ * Gives each footnote its letter, in reading order, starting from the
+ * number of footnotes earlier in the chapter (`noteStart` from Rust).
+ */
+export function letterNotes(
+  children: VerseChild[],
+  noteStart: number
+): VerseChild[] {
+  let next = noteStart;
+  const walk = (items: VerseChild[]): VerseChild[] =>
+    items.map((child) => {
+      if (typeof child === 'string' || child.style === 'w') return child;
+      if (isNote(child)) return { ...child, letter: footnoteLetter(next++) };
+      return { ...child, children: walk(child.children) as Inline[] };
+    });
+  return walk(children);
+}

@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import type { Note, VerseChild } from '$lib/model/verse';
 import {
+  footnoteLetter,
+  letterNotes,
   noteText,
   parseChildren,
   plainText,
@@ -60,5 +62,31 @@ describe('noteText', () => {
 describe('parseChildren', () => {
   test('rejects content that is not an array', () => {
     expect(() => parseChildren('{"style":"w"}')).toThrow();
+  });
+});
+
+describe('footnoteLetter', () => {
+  test('runs a..z, then aa..az, ba..bz, and on', () => {
+    expect([0, 1, 25].map(footnoteLetter)).toEqual(['a', 'b', 'z']);
+    expect([26, 27, 51].map(footnoteLetter)).toEqual(['aa', 'ab', 'az']);
+    expect([52, 77].map(footnoteLetter)).toEqual(['ba', 'bz']);
+    expect([701, 702].map(footnoteLetter)).toEqual(['zz', 'aaa']);
+  });
+});
+
+describe('letterNotes', () => {
+  test('letters notes in reading order from the chapter count', () => {
+    const children = parseChildren<VerseChild>(
+      '["x",{"style":"f","children":[]},{"style":"wj","children":["y"]},{"style":"f","children":[]}]'
+    );
+    const lettered = letterNotes(children, 25);
+    expect(notes(lettered).map((note) => note.letter)).toEqual(['z', 'aa']);
+    expect(plainText(lettered)).toBe('xy');
+  });
+
+  test('leaves the stored content unchanged', () => {
+    const children = verse('GEN 4:10').children;
+    letterNotes(children, 0);
+    expect(notes(children)[0].letter).toBeUndefined();
   });
 });

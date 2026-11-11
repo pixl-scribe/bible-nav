@@ -5,6 +5,7 @@
   import Paragraph from './paragraph.svelte';
   import Verse from './verse.svelte';
   import SearchRow from './search-row.svelte';
+  import FootnoteTooltip from './footnote-tooltip.svelte';
 
   let { moduleId }: { moduleId: string } = $props();
 
@@ -141,6 +142,8 @@
         {/each}
       {/if}
     </div>
+    <!-- The pane's one shared footnote tooltip, kept inside the pane. -->
+    <FootnoteTooltip pane={scrollableElement} />
     <div class="flex h-[calc(100vh-104px)] justify-center w-10 ml-1">
       <IndicatorScrollBar {bibleTextService} />
     </div>

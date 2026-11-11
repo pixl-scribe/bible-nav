@@ -11,7 +11,7 @@ import type {
 } from '$lib/model/verse';
 import { calcLimitAndOffsetWithButter } from '$lib/services/calc-limit-and-offset';
 import { osisToRanges, type RefRange } from '$lib/services/osis-to-ranges';
-import { parseChildren } from '$lib/services/verse-content';
+import { letterNotes, parseChildren } from '$lib/services/verse-content';
 
 /** Paragraphs kept on each side of the active one. */
 export const paraBuffer = 20;
@@ -47,7 +47,11 @@ function toHeading(row: HeadingRow): Heading {
 }
 
 function toVerse(row: VerseRow, headings: Heading[] = []): Verse {
-  return { ...row, children: parseChildren(row.children), headings };
+  return {
+    ...row,
+    children: letterNotes(parseChildren(row.children), row.noteStart),
+    headings,
+  };
 }
 
 function toParagraph(row: ParagraphRow): Paragraph {

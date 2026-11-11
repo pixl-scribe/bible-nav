@@ -57,6 +57,10 @@ pub struct VerseRow {
     pub sid: String,
     /// The verse's inline content as stored: a JSON array.
     pub children: String,
+    /// How many footnotes come before this verse in its chapter, so the
+    /// page can letter them (a, b, ... restarting each chapter) even when
+    /// the loaded text starts partway through a chapter.
+    pub note_start: u32,
 }
 
 #[derive(Debug, Serialize)]
@@ -132,7 +136,68 @@ fn verse_from_row(row: &Row) -> rusqlite::Result<VerseRow> {
         paragraph: row.get(4)?,
         sid: row.get(5)?,
         children: row.get(6)?,
+        note_start: 0,
     })
+}
+
+/// Counts the footnotes in stored verse content (a JSON array).
+pub fn count_notes(children: &str) -> u32 {
+    fn count(value: &serde_json::Value) -> u32 {
+        match value {
+            serde_json::Value::Array(items) => items.iter().map(count).sum(),
+            serde_json::Value::Object(item) => {
+                if item.get("style").and_then(|style| style.as_str()) == Some("f") {
+                    1
+                } else {
+                    item.get("children").map(count).unwrap_or(0)
+                }
+            }
+            _ => 0,
+        }
+    }
+    serde_json::from_str(children)
+        .map(|value| count(&value))
+        .unwrap_or(0)
+}
+
+/// Fills in each verse's `note_start`, for verses given in reading order.
+///
+/// Where a verse doesn't directly follow the previous one (a new window, a
+/// new chapter, or a gap between reference ranges), the footnotes earlier in
+/// its chapter are counted from the module, so letters never depend on which
+/// part of the chapter happens to be loaded.
+fn assign_note_starts<'a>(
+    conn: &Connection,
+    verses: impl IntoIterator<Item = &'a mut VerseRow>,
+) -> Result<()> {
+    let mut previous: Option<(i64, i64, i64)> = None;
+    let mut count = 0;
+    for verse in verses {
+        let follows = previous.is_some_and(|(book, chapter, id)| {
+            book == verse.book_id && chapter == verse.chapter && id + 1 == verse.id
+        });
+        if !follows {
+            count = notes_before(conn, verse)?;
+        }
+        verse.note_start = count;
+        count += count_notes(&verse.children);
+        previous = Some((verse.book_id, verse.chapter, verse.id));
+    }
+    Ok(())
+}
+
+/// The number of footnotes in the verses before `verse` in its chapter.
+fn notes_before(conn: &Connection, verse: &VerseRow) -> Result<u32> {
+    let mut statement = conn.prepare_cached(
+        "SELECT children FROM verses WHERE bookId = ?1 AND chapter = ?2 AND id < ?3",
+    )?;
+    let mut total = 0;
+    for children in statement.query_map(params![verse.book_id, verse.chapter, verse.id], |row| {
+        row.get::<_, String>(0)
+    })? {
+        total += count_notes(&children?);
+    }
+    Ok(total)
 }
 
 fn heading_from_row(row: &Row) -> rusqlite::Result<HeadingRow> {
@@ -274,6 +339,12 @@ pub fn paragraph_window(
         }
     }
 
+    assign_note_starts(
+        conn,
+        paragraphs
+            .iter_mut()
+            .flat_map(|paragraph| paragraph.verses.iter_mut()),
+    )?;
     Ok(ParagraphWindow { center, paragraphs })
 }
 
@@ -291,9 +362,10 @@ pub fn verse_window(
     let mut statement = conn.prepare(&format!(
         "SELECT {VERSE_COLUMNS} FROM verses WHERE id BETWEEN ?1 AND ?2 ORDER BY id"
     ))?;
-    let verses = statement
+    let mut verses = statement
         .query_map(params![from, to], verse_from_row)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
+    assign_note_starts(conn, verses.iter_mut())?;
 
     // A heading shown before verse n has afterVerseId = n - 1.
     let mut statement = conn.prepare(&format!(
@@ -371,9 +443,10 @@ pub fn ref_verses(
     let mut statement = conn.prepare(&format!(
         "SELECT {VERSE_COLUMNS} FROM verses WHERE {clause} ORDER BY id LIMIT ? OFFSET ?"
     ))?;
-    let verses = statement
+    let mut verses = statement
         .query_map(params_from_iter(values), verse_from_row)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
+    assign_note_starts(conn, verses.iter_mut())?;
     Ok(verses
         .into_iter()
         .zip(i64::from(offset)..)
@@ -506,6 +579,63 @@ mod tests {
         let page = ref_verses(db.conn(), &ranges, 2, 3).unwrap();
         let found: Vec<(i64, &str)> = page.iter().map(|v| (v.idx, v.verse.sid.as_str())).collect();
         assert_eq!(found, [(2, "JHN 3:18"), (3, "JHN 3:19"), (4, "JHN 3:20")]);
+    }
+
+    /// Psalm 12's footnotes, lettered per chapter: a and b in verse 1, then
+    /// c, d, e, f in verses 2 to 5, none in 6, g in 7, and h in 8.
+    fn psalm_12_note_starts(verses: &[&VerseRow]) -> Vec<(i64, u32)> {
+        verses
+            .iter()
+            .filter(|verse| verse.sid.starts_with("PSA 12:"))
+            .map(|verse| (verse.nbr, verse.note_start))
+            .collect()
+    }
+
+    #[test]
+    fn counts_footnotes_in_stored_content() {
+        assert_eq!(
+            count_notes(r#"["a",{"style":"f","children":[{"style":"fr","children":["1.1"]}]}]"#),
+            1
+        );
+        assert_eq!(
+            count_notes(
+                r#"[{"style":"wj","children":[{"style":"f","children":[]}]},{"style":"f","children":[]}]"#
+            ),
+            2
+        );
+        assert_eq!(count_notes(r#"["no notes"]"#), 0);
+        assert_eq!(count_notes("not json"), 0);
+    }
+
+    #[test]
+    fn note_starts_count_from_the_start_of_the_chapter() {
+        let db = kjv();
+        // A window that starts partway through Psalm 12, at verse 4.
+        let center = paragraph_for_sid(db.conn(), "PSA 12:5").unwrap();
+        let window = paragraph_window(db.conn(), center, 1, 3).unwrap();
+        let verses: Vec<&VerseRow> = window
+            .paragraphs
+            .iter()
+            .flat_map(|p| p.verses.iter())
+            .collect();
+        assert_eq!(
+            psalm_12_note_starts(&verses),
+            [(4, 4), (5, 5), (6, 6), (7, 6), (8, 7)]
+        );
+
+        let verse_id = verse_id_for_sid(db.conn(), "PSA 12:8").unwrap();
+        let window = verse_window(db.conn(), verse_id, 2, 0).unwrap();
+        let verses: Vec<&VerseRow> = window.verses.iter().collect();
+        assert_eq!(psalm_12_note_starts(&verses), [(6, 6), (7, 6), (8, 7)]);
+    }
+
+    #[test]
+    fn note_starts_survive_gaps_between_reference_ranges() {
+        let db = kjv();
+        let ranges = [range("PSA 12:1", None), range("PSA 12:5", Some("PSA 12:6"))];
+        let page = ref_verses(db.conn(), &ranges, 0, 10).unwrap();
+        let verses: Vec<&VerseRow> = page.iter().map(|v| &v.verse).collect();
+        assert_eq!(psalm_12_note_starts(&verses), [(1, 0), (5, 5), (6, 6)]);
     }
 
     #[test]

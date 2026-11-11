@@ -8,8 +8,14 @@ import { render } from 'svelte/server';
 import VerseText from '$lib/components/verse-text.svelte';
 import HeadingText from '$lib/components/heading-text.svelte';
 import ParagraphView from '$lib/components/paragraph.svelte';
-import type { Heading, Inline, Paragraph, Verse } from '$lib/model/verse';
-import { parseChildren } from '$lib/services/verse-content';
+import type {
+  Heading,
+  Inline,
+  Paragraph,
+  Verse,
+  VerseChild,
+} from '$lib/model/verse';
+import { letterNotes, parseChildren } from '$lib/services/verse-content';
 import samples from '$lib/services/fixtures/kjv-samples.json';
 
 function toVerse(sample: (typeof samples.verses)[number]): Verse {
@@ -20,7 +26,8 @@ function toVerse(sample: (typeof samples.verses)[number]): Verse {
     nbr: 1,
     paragraph: 0,
     sid: sample.sid,
-    children: parseChildren(sample.children),
+    children: letterNotes(parseChildren(sample.children), 0),
+    noteStart: 0,
     headings: [],
   };
 }
@@ -108,4 +115,48 @@ describe('verse rendering', () => {
     });
     expect(visibleText(body)).toContain(`${first.raw} 2 ${second.raw}`);
   });
+
+  test('labels each footnote with its letter', () => {
+    const sample = samples.verses.find((v) => v.sid === 'GEN 4:10')!;
+    const verse = {
+      ...toVerse(sample),
+      children: letterNotes(parseChildren(sample.children), 2),
+    };
+    const { body } = render(VerseText, { props: { verse } });
+    expect(body).toMatch(
+      /aria-label="Footnote c: 4\.10 [^"]*"[^>]*>c<\/button>/
+    );
+    // The marker asks the pane's shared tooltip to show the note, so it
+    // carries no tooltip of its own.
+    expect(body).not.toContain('data-tip');
+  });
+
+  test.each(samples.verses.map((v) => v.sid))(
+    '%s shows each footnote letter exactly in place, with no added spaces',
+    (sid) => {
+      const sample = samples.verses.find((v) => v.sid === sid)!;
+      const children = letterNotes(parseChildren(sample.children), 0);
+      // The stored text with each footnote's letter where the note sits.
+      const withLetters = (items: VerseChild[]): string =>
+        items
+          .map((item) => {
+            if (typeof item === 'string') return item;
+            if (item.style === 'f') return item.letter;
+            if (item.style === 'w') return item.txt;
+            return withLetters(item.children);
+          })
+          .join('');
+      const { body } = render(VerseText, {
+        props: { verse: { ...toVerse(sample), children } },
+      });
+      // Keep the markers' letters; drop only the popover's hidden note text.
+      const shown = body.replace(
+        /<span[^>]*\spopover[^>]*>[\s\S]*?<\/span>/g,
+        ''
+      );
+      expect(visibleText(shown.replace(/data-footnote/g, ''))).toBe(
+        withLetters(children)
+      );
+    }
+  );
 });

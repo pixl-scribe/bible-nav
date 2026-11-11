@@ -34,6 +34,8 @@ export interface NoteSegment {
 export interface Note {
   style: 'f';
   children: NoteSegment[];
+  /** Its letter within the chapter (a, b, ... z, aa, ...), added when loaded. */
+  letter?: string;
 }
 
 export type VerseChild = Inline | Note;
@@ -60,6 +62,8 @@ export interface Verse {
   paragraph: number;
   sid: string;
   children: VerseChild[];
+  /** How many footnotes come before this verse in its chapter. */
+  noteStart: number;
   /** Headings shown just before this verse (verse grouping mode). */
   headings: Heading[];
 }
@@ -88,6 +92,7 @@ export interface VerseRow {
   paragraph: number;
   sid: string;
   children: string;
+  noteStart: number;
 }
 
 export interface HeadingRow {
