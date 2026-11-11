@@ -1,11 +1,18 @@
 <script lang="ts">
-  import { Columns2, Plus, Search } from '@lucide/svelte';
+  import { Columns2, Search } from '@lucide/svelte';
   import { _ } from 'svelte-i18n';
   import BibleTextService from '$lib/services/bible-text-service.svelte.js';
   import type { AutoCompleteOption } from '$lib/model/auto-complete-option';
 
-  let { bibleTextService }: { bibleTextService: BibleTextService | undefined } =
-    $props();
+  let {
+    bibleTextService,
+    parallelOpen,
+    onToggleParallel,
+  }: {
+    bibleTextService: BibleTextService | undefined;
+    parallelOpen: boolean;
+    onToggleParallel: () => void;
+  } = $props();
 
   let inputRef = $state<HTMLInputElement | undefined>(undefined);
 
@@ -56,11 +63,13 @@
     />
   </label>
   <button
-    class="btn btn-soft btn-primary px-1 ml-2 tooltip tooltip-bottom"
-    data-tip={$_('bible-text.add-parallel')}
+    type="button"
+    class={['btn btn-soft btn-primary ml-2', parallelOpen && 'btn-active']}
+    aria-pressed={parallelOpen}
+    onclick={onToggleParallel}
   >
-    <Plus size={16} />
-    <Columns2 />
+    <Columns2 size={18} />
+    {$_('bible-text.parallel')}
   </button>
   {#if bibleTextService && bibleTextService.autoCompleteOptions.length > 0}
     <ul

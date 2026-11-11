@@ -81,6 +81,13 @@ export interface Paragraph {
   verses: Verse[];
 }
 
+/** A footnote as listed in the Notes tab: its verse, letter, and note. */
+export interface ChapterNote {
+  sid: string;
+  letter: string;
+  note: Note;
+}
+
 // Rows as the Rust commands return them, with children still as JSON text.
 
 export interface VerseRow {

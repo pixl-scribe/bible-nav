@@ -19,7 +19,7 @@
   import {
     FOOTNOTE_TOOLTIP_EVENT,
     type FootnoteTooltipRequest,
-  } from '$lib/services/footnote-tooltip';
+  } from '$lib/services/footnote-events';
 
   let { pane }: { pane: HTMLElement | undefined } = $props();
 

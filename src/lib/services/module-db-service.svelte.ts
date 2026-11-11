@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { Book } from '$lib/model/book';
 import type {
+  ChapterNote,
   Heading,
   HeadingRow,
   Inline,
@@ -11,7 +12,11 @@ import type {
 } from '$lib/model/verse';
 import { calcLimitAndOffsetWithButter } from '$lib/services/calc-limit-and-offset';
 import { osisToRanges, type RefRange } from '$lib/services/osis-to-ranges';
-import { letterNotes, parseChildren } from '$lib/services/verse-content';
+import {
+  letterNotes,
+  notesIn,
+  parseChildren,
+} from '$lib/services/verse-content';
 
 /** Paragraphs kept on each side of the active one. */
 export const paraBuffer = 20;
@@ -162,6 +167,24 @@ export default class ModuleDbService {
     return split(
       rows.map((row) => toVerse(row)),
       (verse) => (verse.idx ?? 0) - index
+    );
+  }
+
+  /**
+   * Every footnote in the chapter holding verse `sid`, in reading order and
+   * lettered as in the reading text.
+   */
+  public async getChapterNotes(sid: string): Promise<ChapterNote[]> {
+    const rows = await invoke<VerseRow[]>('chapter_notes', {
+      moduleId: this.moduleId,
+      sid,
+    });
+    return rows.flatMap((row) =>
+      notesIn(toVerse(row).children).map((note) => ({
+        sid: row.sid,
+        letter: note.letter ?? '',
+        note,
+      }))
     );
   }
 

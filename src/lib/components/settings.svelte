@@ -5,6 +5,7 @@
   import I18nService from '$lib/services/i18n-service.svelte';
   import {
     type AppSettings,
+    type TextWidth,
     appSettingsService,
   } from '$lib/services/app-settings-service.svelte.js';
   import { onMount } from 'svelte';
@@ -35,6 +36,17 @@
       await appSettingsService.saveSettings(appSettings);
     }
   }
+
+  async function setTextWidth(
+    event: Event & { currentTarget: HTMLSelectElement }
+  ) {
+    if (appSettings) {
+      appSettings.textWidth = event.currentTarget.value as TextWidth;
+      await appSettingsService.saveSettings(appSettings);
+    }
+  }
+
+  const textWidths: TextWidth[] = ['narrow', 'medium', 'wide', 'full'];
 
   const folderStatus = $derived(moduleFolderService.status);
 
@@ -101,6 +113,19 @@
       <option value="verse" selected={appSettings?.groupingMode === 'verse'}
         >{$_(`settings.groupBy.verse`)}</option
       >
+    </select>
+  </fieldset>
+
+  <fieldset class="fieldset">
+    <legend class="fieldset-legend">{$_('settings.text-width')}</legend>
+    <select class="select" onchange={setTextWidth}>
+      {#each textWidths as width (width)}
+        <option
+          value={width}
+          selected={(appSettings?.textWidth ?? 'medium') === width}
+          >{$_(`settings.text-width.${width}`)}</option
+        >
+      {/each}
     </select>
   </fieldset>
 

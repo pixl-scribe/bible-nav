@@ -5,4 +5,4 @@
   let { verse }: { verse: Verse } = $props();
 </script>
 
-<InlineContent items={verse.children} />
+<InlineContent items={verse.children} sid={verse.sid} />

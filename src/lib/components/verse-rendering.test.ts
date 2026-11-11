@@ -72,10 +72,10 @@ describe('verse rendering', () => {
     const sample = samples.verses.find((v) => v.sid === 'GEN 4:10')!;
     const { body } = render(VerseText, { props: { verse: toVerse(sample) } });
     expect(body).toContain('data-footnote');
-    // The marker opens a popover holding the note, which starts with its reference.
-    expect(body).toMatch(
-      /popovertarget="([^"]+)"[\s\S]*id="\1" popover[^>]*>4\.10 /
-    );
+    // The marker names its note, which starts with its reference, for screen
+    // readers. Clicking it opens the Notes tab, so it holds no note text.
+    expect(body).toMatch(/aria-label="Footnote a: 4\.10 [^"]+"/);
+    expect(body).not.toContain('popover');
   });
 
   test.each(samples.headings.map((h) => h.raw))(
@@ -124,7 +124,7 @@ describe('verse rendering', () => {
     };
     const { body } = render(VerseText, { props: { verse } });
     expect(body).toMatch(
-      /aria-label="Footnote c: 4\.10 [^"]*"[^>]*>c<\/button>/
+      /role="button"[^>]*aria-label="Footnote c: 4\.10 [^"]*"[^>]*>c<\/span>/
     );
     // The marker asks the pane's shared tooltip to show the note, so it
     // carries no tooltip of its own.
@@ -149,12 +149,8 @@ describe('verse rendering', () => {
       const { body } = render(VerseText, {
         props: { verse: { ...toVerse(sample), children } },
       });
-      // Keep the markers' letters; drop only the popover's hidden note text.
-      const shown = body.replace(
-        /<span[^>]*\spopover[^>]*>[\s\S]*?<\/span>/g,
-        ''
-      );
-      expect(visibleText(shown.replace(/data-footnote/g, ''))).toBe(
+      // Keep the markers' letters.
+      expect(visibleText(body.replace(/data-footnote/g, ''))).toBe(
         withLetters(children)
       );
     }

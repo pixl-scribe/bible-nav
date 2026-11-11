@@ -3,6 +3,8 @@ import type { Note, VerseChild } from '$lib/model/verse';
 import {
   footnoteLetter,
   letterNotes,
+  moduleAbbreviation,
+  notesIn,
   noteText,
   parseChildren,
   plainText,
@@ -88,5 +90,33 @@ describe('letterNotes', () => {
     const children = verse('GEN 4:10').children;
     letterNotes(children, 0);
     expect(notes(children)[0].letter).toBeUndefined();
+  });
+});
+
+describe('notesIn', () => {
+  test('finds every footnote in reading order, nested ones included', () => {
+    const children: VerseChild[] = [
+      'a',
+      { style: 'f', children: [{ style: 'fr', children: ['1.1'] }] },
+      {
+        style: 'wj',
+        children: [
+          { style: 'f', children: [{ style: 'fr', children: ['1.2'] }] },
+        ],
+      } as unknown as VerseChild,
+    ];
+    expect(notesIn(children).map(noteText)).toEqual(['1.1', '1.2']);
+    expect(notesIn(['no notes'])).toEqual([]);
+  });
+});
+
+describe('moduleAbbreviation', () => {
+  test('uses the capital initials, leaving out the year', () => {
+    expect(moduleAbbreviation('King James Version (1769)')).toBe('KJV');
+    expect(moduleAbbreviation('Geneva Bible (1599)')).toBe('GB');
+  });
+
+  test('keeps a name that has no initials to use', () => {
+    expect(moduleAbbreviation('textus receptus')).toBe('textus receptus');
   });
 });

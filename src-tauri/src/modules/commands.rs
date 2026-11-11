@@ -18,7 +18,7 @@ use tauri::State;
 use super::db::ModuleDb;
 use super::error::{ModuleError, Result};
 use super::queries::{
-    self, Book, IndexedVerse, ModuleInfo, ParagraphWindow, RefRange, VerseWindow,
+    self, Book, IndexedVerse, ModuleInfo, ParagraphWindow, RefRange, VerseRow, VerseWindow,
 };
 
 /// The modules currently open, by id (such as "eng_kjv").
@@ -183,6 +183,19 @@ pub async fn ref_verses(
 ) -> Result<Vec<IndexedVerse>> {
     run(&registry, &module_id, move |conn| {
         queries::ref_verses(conn, &ranges, offset, limit)
+    })
+    .await
+}
+
+/// The verses with footnotes in the chapter holding verse `sid`.
+#[tauri::command]
+pub async fn chapter_notes(
+    registry: State<'_, ModuleRegistry>,
+    module_id: String,
+    sid: String,
+) -> Result<Vec<VerseRow>> {
+    run(&registry, &module_id, move |conn| {
+        queries::chapter_notes(conn, &sid)
     })
     .await
 }

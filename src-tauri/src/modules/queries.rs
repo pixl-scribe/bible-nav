@@ -454,6 +454,30 @@ pub fn ref_verses(
         .collect())
 }
 
+/// The verses with footnotes in the chapter that holds verse `sid`, in
+/// reading order, each with its `note_start` so the page letters the notes
+/// exactly as the reading text does. This is what the Notes tab lists.
+pub fn chapter_notes(conn: &Connection, sid: &str) -> Result<Vec<VerseRow>> {
+    let (book_id, chapter): (i64, i64) = conn
+        .query_row(
+            "SELECT bookId, chapter FROM verses WHERE sid = ?1",
+            [sid],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?
+        .ok_or_else(|| ModuleError::NotFound(format!("verse {sid}")))?;
+    let mut statement = conn.prepare(&format!(
+        "SELECT {VERSE_COLUMNS} FROM verses WHERE bookId = ?1 AND chapter = ?2 ORDER BY id"
+    ))?;
+    let mut verses = statement
+        .query_map(params![book_id, chapter], verse_from_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    assign_note_starts(conn, verses.iter_mut())?;
+    // `retain` keeps only the verses for which the closure returns true.
+    verses.retain(|verse| count_notes(&verse.children) > 0);
+    Ok(verses)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -636,6 +660,24 @@ mod tests {
         let page = ref_verses(db.conn(), &ranges, 0, 10).unwrap();
         let verses: Vec<&VerseRow> = page.iter().map(|v| &v.verse).collect();
         assert_eq!(psalm_12_note_starts(&verses), [(1, 0), (5, 5), (6, 6)]);
+    }
+
+    #[test]
+    fn lists_a_chapters_notes_from_any_verse_in_it() {
+        let db = kjv();
+        let verses = chapter_notes(db.conn(), "PSA 12:6").unwrap();
+        let verses: Vec<&VerseRow> = verses.iter().collect();
+        // Verse 6 has no notes, so it isn't listed.
+        assert_eq!(
+            psalm_12_note_starts(&verses),
+            [(1, 0), (2, 2), (3, 3), (4, 4), (5, 5), (7, 6), (8, 7)]
+        );
+        // The New Testament has no notes in this module.
+        assert!(chapter_notes(db.conn(), "JHN 3:16").unwrap().is_empty());
+        assert!(matches!(
+            chapter_notes(db.conn(), "PSA 999:1"),
+            Err(ModuleError::NotFound(_))
+        ));
     }
 
     #[test]

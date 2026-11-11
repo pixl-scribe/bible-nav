@@ -8,6 +8,7 @@ import { appSettingsService } from './app-settings-service.svelte';
 import type { AutoCompleteOption } from '$lib/model/auto-complete-option';
 import { splitByLastDelimiter } from '$lib/services/string-utils';
 import { parseSearch, type SearchType } from '$lib/services/search-parser';
+import { moduleAbbreviation } from '$lib/services/verse-content';
 import ModuleDbService, {
   paraBuffer,
   verseBuffer,
@@ -60,12 +61,18 @@ export default class BibleTextService {
   public selectInProgress = $state<boolean>(true);
   public adjustingScrollPct = $state<boolean>(false);
   public moduleName = $state<string>('');
+  /** A short name for the module, such as "KJV". */
+  public moduleAbbreviation = $state<string>('');
+  /** The verse to highlight, after a Notes tab heading took the reader there. */
+  public highlightSid = $state<string | undefined>();
+  /** A verse the pane should bring into view (see bible-text.svelte). */
+  public revealSid = $state<string | undefined>();
   public referenceLabel = $state<string>('');
   public autoCompletePickInProgress = $state<boolean>(false);
   /** A problem loading text, such as a missing module, to show the reader. */
   public loadError = $state<string | undefined>(undefined);
 
-  constructor(moduleId: string) {
+  constructor(public readonly moduleId: string) {
     this.moduleDbService = new ModuleDbService(moduleId);
     this.getModule().catch((err) => (this.loadError = String(err)));
     this.getBooks().catch((err) => (this.loadError = String(err)));
@@ -156,6 +163,44 @@ export default class BibleTextService {
     if (this.sids.length <= 1 || !pct) return;
     const stepSize = Math.max(Math.round(100 / (this.sids.length - 1)), 1);
     this._scrollPct = Math.round(pct / stepSize) * stepSize;
+  }
+
+  /** A verse in the text being read, such as 'PSA 12:1'. */
+  public get sidInView(): string | undefined {
+    const paragraphs = [this.activePara, ...this.nextParaBuffer];
+    for (const paragraph of paragraphs) {
+      const verse = paragraph?.verses[0];
+      if (verse) return verse.sid;
+    }
+    return this.activeVerse?.sid;
+  }
+
+  /**
+   * Takes the reader to verse `sid` and highlights it. The pane scrolls to it
+   * if it's loaded, or loads the text there (see bible-text.svelte).
+   */
+  public goToSid(sid: string): void {
+    this.highlightSid = sid;
+    this.revealSid = sid;
+  }
+
+  /** The footnotes in the chapter holding verse `sid`, for the Notes tab. */
+  public getChapterNotes(sid: string) {
+    return this.moduleDbService.getChapterNotes(sid);
+  }
+
+  /** Loads the text at verse `sid`, which then scrolls into view. */
+  public loadAtSid(sid: string): void {
+    this.currentSearch = sid;
+    this.currentSearchType = 'ref-point';
+  }
+
+  /** A chapter's name from any verse in it: 'PSA 12:3' gives 'Psalms 12'. */
+  public formatChapterFromSid(sid: string) {
+    const [bookId, verseRef] = sid.split(' ');
+    const book = this.books[bookId];
+    if (!book || !verseRef) return '';
+    return `${book.toc2} ${verseRef.split(':')[0]}`;
   }
 
   /**
@@ -307,6 +352,7 @@ export default class BibleTextService {
     }
 
     this.autoCompleteOptions = [];
+    this.highlightSid = undefined;
     const searchLower = searchInput.toLowerCase();
     const [_before, after] = splitByLastDelimiter(
       searchLower,
@@ -452,6 +498,7 @@ export default class BibleTextService {
 
   private async getModule(): Promise<void> {
     this.moduleName = await this.moduleDbService.getModuleName();
+    this.moduleAbbreviation = moduleAbbreviation(this.moduleName);
   }
 
   private async getBooks(): Promise<void> {

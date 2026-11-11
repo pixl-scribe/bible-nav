@@ -16,7 +16,7 @@
   }
 </script>
 
-<ul class="menu bg-base-200 rounded-box rounded-xl space-y-1">
+<ul class="menu bg-base-100 rounded-box rounded-xl space-y-1 self-start">
   <li>
     <!-- svelte-ignore a11y_missing_attribute -->
     <a

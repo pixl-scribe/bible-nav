@@ -2,3 +2,10 @@
 @plugin "daisyui" {
     themes: light, dark --default --prefersdark, night, dim, nord, autumn, cupcake, emerald, retro ;
 }
+
+/* The selected verse and its note, in the main pane and the Notes tab. They
+   always change together, so they share one look: a fill, which also wraps
+   cleanly with inline verse text (an outline would box each line). */
+@utility pair-highlight {
+    background-color: color-mix(in oklab, var(--color-primary) 20%, transparent);
+}

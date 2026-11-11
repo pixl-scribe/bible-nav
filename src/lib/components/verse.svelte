@@ -21,7 +21,13 @@
 {#each verse.headings as heading (heading.id)}
   <HeadingText {heading} />
 {/each}
-<p class="{className} my-1">
+<p
+  class={[
+    className,
+    'my-1 rounded-sm',
+    bibleTextService?.highlightSid === verse.sid && 'pair-highlight',
+  ]}
+>
   <span class="text-xs text-base-content/60" id={verse.sid}
     >{bibleTextService?.formatRefFromSid(verse.sid)}</span
   >{' '}<VerseText {verse} />

@@ -21,6 +21,7 @@ pub fn run() {
             modules::commands::verse_window_at_sid,
             modules::commands::ref_sids,
             modules::commands::ref_verses,
+            modules::commands::chapter_notes,
             modules::folder::modules_folder_status,
             modules::folder::dismiss_modules_folder_notice,
             modules::folder::change_modules_folder,
