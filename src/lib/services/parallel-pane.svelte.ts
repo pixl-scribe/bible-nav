@@ -23,6 +23,11 @@ export function notesTabKey(moduleId: string): string {
   return `notes:${moduleId}`;
 }
 
+/** The chapter of a verse: 'PSA 12:3' is in 'PSA 12'. */
+export function chapterOf(sid: string): string {
+  return sid.split(':')[0];
+}
+
 export class ParallelPane {
   public open = $state(false);
   public tabs = $state<ParallelTab[]>([]);
@@ -65,6 +70,20 @@ export class ParallelPane {
     }
     this.activeKey = key;
     this.open = true;
+  }
+
+  /**
+   * Moves a module's Notes tab, if it's open, to the chapter holding `sid`:
+   * the chapter now in view. Called only when that chapter changes, so a
+   * note clicked further down, in the next chapter, stays shown until the
+   * reader scrolls into another chapter. The highlighted note is kept, for
+   * when the reader comes back to its chapter.
+   */
+  public followChapter(moduleId: string, sid: string): void {
+    const tab = this.tabs.find((t) => t.key === notesTabKey(moduleId));
+    if (!tab || chapterOf(tab.sid) === chapterOf(sid)) return;
+    tab.sid = sid;
+    tab.scrollRequest += 1;
   }
 
   /** Highlights a note without scrolling the list. */

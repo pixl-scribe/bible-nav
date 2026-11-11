@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { SearchTabs } from './search-tabs.svelte';
-import { ParallelPane } from './parallel-pane.svelte';
+import { chapterOf, ParallelPane } from './parallel-pane.svelte';
 
 describe('SearchTabs', () => {
   test('starts with one new search, shown', () => {
@@ -111,5 +111,36 @@ describe('ParallelPane', () => {
     pane.toggle();
     expect(pane.open).toBe(false);
     expect(pane.tabs).toHaveLength(1);
+  });
+
+  test('the Notes tab follows the reader to another chapter', () => {
+    const pane = new ParallelPane();
+    pane.openNotes('eng_kjv', 'PSA 12:3', 'd');
+    const request = pane.active!.scrollRequest;
+    pane.followChapter('eng_kjv', 'PSA 13:1');
+    expect(pane.active!.sid).toBe('PSA 13:1');
+    expect(pane.active!.scrollRequest).toBeGreaterThan(request);
+    // The highlighted note is kept for when the reader comes back.
+    expect(pane.active!.focusLetter).toBe('d');
+  });
+
+  test('following within the same chapter changes nothing', () => {
+    const pane = new ParallelPane();
+    pane.openNotes('eng_kjv', 'PSA 12:3', 'd');
+    const request = pane.active!.scrollRequest;
+    pane.followChapter('eng_kjv', 'PSA 12:8');
+    expect(pane.active!.sid).toBe('PSA 12:3');
+    expect(pane.active!.scrollRequest).toBe(request);
+  });
+
+  test('following never opens a Notes tab', () => {
+    const pane = new ParallelPane();
+    pane.followChapter('eng_kjv', 'PSA 13:1');
+    expect(pane.tabs).toHaveLength(0);
+    expect(pane.open).toBe(false);
+  });
+
+  test('chapterOf drops the verse number', () => {
+    expect(chapterOf('PSA 119:176')).toBe('PSA 119');
   });
 });

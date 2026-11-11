@@ -3,7 +3,9 @@
    * One search: its main pane and, beside it, its parallel pane. Hidden
    * searches stay mounted, so switching tabs keeps each one's place.
    */
+  import { untrack } from 'svelte';
   import BibleTextService from '$lib/services/bible-text-service.svelte';
+  import { chapterOf } from '$lib/services/parallel-pane.svelte';
   import type { SearchTab } from '$lib/services/search-tabs.svelte';
   import {
     FOOTNOTE_OPEN_EVENT,
@@ -31,6 +33,21 @@
   // The search tab shows what was typed.
   $effect(() => {
     tab.label = service?.searchInput.trim() ?? '';
+  });
+
+  // The chapter at the top of the main pane. As a $derived, it only signals
+  // a change when the chapter itself changes, not on every scrolled verse.
+  const chapterInView = $derived(
+    service?.sidInView ? chapterOf(service.sidInView) : undefined
+  );
+
+  // The Notes tab follows the chapter in view.
+  $effect(() => {
+    if (!chapterInView) return;
+    untrack(() => {
+      const sid = service?.sidInView;
+      if (service && sid) tab.parallel.followChapter(service.moduleId, sid);
+    });
   });
 
   // A footnote clicked in the main pane opens it in the Notes tab.

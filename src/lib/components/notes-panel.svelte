@@ -8,7 +8,7 @@
   import { _ } from 'svelte-i18n';
   import type { ChapterNote } from '$lib/model/verse';
   import type BibleTextService from '$lib/services/bible-text-service.svelte';
-  import type { NotesTab } from '$lib/services/parallel-pane.svelte';
+  import { chapterOf, type NotesTab } from '$lib/services/parallel-pane.svelte';
   import { noteText } from '$lib/services/verse-content';
 
   let {
@@ -29,8 +29,7 @@
   let error = $state<string | undefined>();
   let list = $state<HTMLElement>();
 
-  /** 'PSA 12:3' and 'PSA 12:9' are both in chapter 'PSA 12'. */
-  const chapter = $derived(tab.sid.split(':')[0]);
+  const chapter = $derived(chapterOf(tab.sid));
   const chapterName = $derived(
     service.formatChapterFromSid(tab.sid) || chapter
   );
@@ -46,7 +45,7 @@
         .getChapterNotes(sid)
         .then((found) => {
           // Ignore an answer for a chapter the tab has already left.
-          if (tab.sid.split(':')[0] !== wanted) return;
+          if (chapterOf(tab.sid) !== wanted) return;
           notes = found;
           loadedChapter = wanted;
         })
@@ -54,20 +53,16 @@
     });
   });
 
-  // Scroll the focused note to the top when a footnote in the text asks
-  // (scrollRequest), once its chapter is shown. Clicking a heading here only
-  // changes the highlight, so the letter is read untracked.
+  // When asked (scrollRequest: a footnote was clicked, or the tab followed
+  // the reader to another chapter), scroll the highlighted note to the top,
+  // or the list to its start if this chapter has none highlighted. Clicking
+  // a heading here only changes the highlight, so it's read untracked.
   $effect(() => {
     void tab.scrollRequest;
     if (loadedChapter !== chapter || !list) return;
     untrack(async () => {
       await tick();
-      const letter = tab.focusLetter;
-      const target = letter
-        ? list?.querySelector<HTMLElement>(
-            `[data-note-letter="${CSS.escape(letter)}"]`
-          )
-        : undefined;
+      const target = list?.querySelector<HTMLElement>('[data-focused]');
       if (!list) return;
       list.scrollTo({ top: target ? target.offsetTop - 8 : 0 });
     });
@@ -107,7 +102,7 @@
         {@const focused =
           note.letter === tab.focusLetter && note.sid === service.highlightSid}
         <div
-          data-note-letter={note.letter}
+          data-focused={focused || undefined}
           class={['rounded-lg px-2.5 py-2', focused && 'pair-highlight']}
         >
           <button
