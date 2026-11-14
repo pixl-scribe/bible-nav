@@ -81,6 +81,41 @@ pub fn test_key() -> SigningKey {
 /// Writes a manifest for the file at `module`, under its own name, and a
 /// signature file signed with `key`.
 pub fn sign_copy(module: &Path, id: &str, version: &str, format_version: i64, key: &SigningKey) {
+    sign_copy_as(module, id, version, format_version, key, "Test edition");
+}
+
+/// Like `sign_copy`, naming the edition. The manifest's roots are computed
+/// from the file, so it describes the text honestly; files that aren't
+/// modules get roots of zeros.
+pub fn sign_copy_as(
+    module: &Path,
+    id: &str,
+    version: &str,
+    format_version: i64,
+    key: &SigningKey,
+    edition: &str,
+) {
+    let roots =
+        rusqlite::Connection::open_with_flags(module, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .ok()
+            .and_then(|conn| super::text_tree::roots(&conn).ok())
+            .unwrap_or(super::text_tree::Roots {
+                text: "0".repeat(64),
+                content: "0".repeat(64),
+            });
+    sign_with_roots(module, id, version, format_version, key, edition, &roots);
+}
+
+/// Like `sign_copy_as`, with the roots given, true or not.
+pub fn sign_with_roots(
+    module: &Path,
+    id: &str,
+    version: &str,
+    format_version: i64,
+    key: &SigningKey,
+    edition: &str,
+    roots: &super::text_tree::Roots,
+) {
     let bytes = fs::read(module).expect("module");
     let sha256: String = Sha256::digest(&bytes)
         .iter()
@@ -94,6 +129,12 @@ pub fn sign_copy(module: &Path, id: &str, version: &str, format_version: i64, ke
             "name": module.file_name().unwrap().to_string_lossy(),
             "size": bytes.len(),
             "sha256": sha256,
+        },
+        "text": {
+            "treeVersion": 1,
+            "edition": edition,
+            "textRoot": roots.text,
+            "contentRoot": roots.content,
         },
     }))
     .unwrap()

@@ -36,6 +36,7 @@ pub struct Manifest {
     pub manifest_version: u32,
     pub module: ManifestModule,
     pub file: ManifestFile,
+    pub text: ManifestText,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -44,6 +45,17 @@ pub struct ManifestModule {
     pub id: String,
     pub version: String,
     pub format_version: i64,
+}
+
+/// What the manifest says about the module's text. The roots are only what
+/// its signer wrote: `pins.rs` checks them against roots computed from the
+/// module itself.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManifestText {
+    pub tree_version: u32,
+    pub text_root: String,
+    pub content_root: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]

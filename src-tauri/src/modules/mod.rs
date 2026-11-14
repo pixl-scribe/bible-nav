@@ -5,6 +5,8 @@
 //! - `keys`: the public keys and key statements built into the app.
 //! - `statements`: key statements, which revoke and add primary keys.
 //! - `trust`: which keys sign modules now, from the keys and statements.
+//! - `pins`: pinned editions, whose text the app knows by its text root.
+//! - `text_tree`: computes a module's text and content roots.
 //! - `queries`: the queries the app runs, with bound parameters.
 //! - `commands`: the Tauri commands the web page calls.
 //! - `store`: the visible modules folder on disk.
@@ -17,9 +19,11 @@ pub mod error;
 pub mod folder;
 pub mod integrity;
 pub mod keys;
+pub mod pins;
 pub mod queries;
 pub mod statements;
 pub mod store;
+pub mod text_tree;
 pub mod trust;
 
 #[cfg(test)]

@@ -11,6 +11,7 @@ use rusqlite::{Connection, OpenFlags};
 
 use super::error::{ModuleError, Result};
 use super::integrity::{self, Manifest, Sidecars};
+use super::pins;
 use super::trust::{self, Trust};
 
 /// The module format version this app reads (`module.formatVersion`).
@@ -77,6 +78,7 @@ impl ModuleDb {
         let conn = Connection::open_with_flags(uri, flags)?;
         check_format(&conn)?;
         check_identity(&conn, &manifest)?;
+        pins::check_text(&conn, &manifest, pins::PINNED_EDITIONS)?;
         Ok(Self { conn })
     }
 
