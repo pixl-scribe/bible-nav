@@ -9,3 +9,14 @@
 @utility pair-highlight {
     background-color: color-mix(in oklab, var(--color-primary) 20%, transparent);
 }
+
+/* Formatting in a text's own markup (inline-content.svelte gives each styled
+   span its style as a class): bold and italic, such as the LSV's
+   [[or ...]] alternative readings. */
+span.bd {
+    font-weight: 700;
+}
+
+span.it {
+    font-style: italic;
+}

@@ -14,10 +14,11 @@ export interface GlossaryWord {
 
 /**
  * Styled text that can nest other inline content. add: translator's
- * addition, nd: name of deity, tl: transliterated word, wj: words of Jesus.
+ * addition, nd: name of deity, tl: transliterated word, wj: words of Jesus,
+ * bd: bold, it: italic (formatting, such as the LSV's [[or ...]] readings).
  */
 export interface StyledText {
-  style: 'add' | 'nd' | 'tl' | 'wj';
+  style: 'add' | 'nd' | 'tl' | 'wj' | 'bd' | 'it';
   children: Inline[];
 }
 

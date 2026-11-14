@@ -157,3 +157,41 @@ describe('verse rendering', () => {
     }
   );
 });
+
+describe('formatting from other texts', () => {
+  test('the LSV shows its bold brackets and italic "or", with every word', () => {
+    // 1 Corinthians 15:55 in the Literal Standard Version (eng_lsv-1.0.0).
+    const children = JSON.stringify([
+      { style: 'w', strong: 'G4226', txt: 'Where' },
+      ', O ',
+      { style: 'w', strong: 'G2288', txt: 'Death' },
+      ', ',
+      { style: 'w', strong: 'G3588', txt: 'your' },
+      ' ',
+      { style: 'w', strong: 'G2759', txt: 'sting' },
+      '? ',
+      { style: 'w', strong: 'G4226', txt: 'Where' },
+      ', O ',
+      { style: 'w', strong: 'G2288', txt: 'Death' },
+      ' ',
+      { style: 'bd', children: ['[['] },
+      { style: 'it', children: ['or'] },
+      ' Hades',
+      { style: 'bd', children: [']]'] },
+      ', ',
+      { style: 'w', strong: 'G3588', txt: 'your' },
+      ' ',
+      { style: 'w', strong: 'G3534', txt: 'victory' },
+      '?”',
+    ]);
+    const { body } = render(VerseText, {
+      props: { verse: toVerse({ sid: '1CO 15:55', children, raw: '' }) },
+    });
+    expect(visibleText(body)).toBe(
+      'Where, O Death, your sting? Where, O Death [[or Hades]], your victory?”'
+    );
+    const markup = body.replace(/<!--[\s\S]*?-->/g, '');
+    expect(markup).toContain('<span class="bd">[[</span>');
+    expect(markup).toContain('<span class="it">or</span>');
+  });
+});
