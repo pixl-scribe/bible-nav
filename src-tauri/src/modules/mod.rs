@@ -2,7 +2,9 @@
 //!
 //! - `db`: opens and checks module files.
 //! - `integrity`: checks a module's signed manifest before it's opened.
-//! - `keys`: the public keys this app trusts.
+//! - `keys`: the public keys and key statements built into the app.
+//! - `statements`: key statements, which revoke and add primary keys.
+//! - `trust`: which keys sign modules now, from the keys and statements.
 //! - `queries`: the queries the app runs, with bound parameters.
 //! - `commands`: the Tauri commands the web page calls.
 //! - `store`: the visible modules folder on disk.
@@ -16,7 +18,9 @@ pub mod folder;
 pub mod integrity;
 pub mod keys;
 pub mod queries;
+pub mod statements;
 pub mod store;
+pub mod trust;
 
 #[cfg(test)]
 mod test_support;

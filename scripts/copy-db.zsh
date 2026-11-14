@@ -13,6 +13,14 @@ rm -f $resources/eng_kjv.db.gz $resources/eng_kjv-*.db.gz $resources/eng_kjv-*.m
 gzip -n -c "$exports/eng_kjv-${version}.db" > "$resources/eng_kjv-${version}.db.gz"
 cp "$exports/eng_kjv-${version}.manifest.json" "$exports/eng_kjv-${version}.manifest.sig" $resources/
 
+# Key statements published in bible-nav-modules are built into the app
+# (src-tauri/keys, listed in BUILT_IN_STATEMENTS in keys.rs).
+statements=../bible-nav-modules/keys/statements
+for statement in $statements/bible-nav-keys-*.json; do
+  cp "$statement" "${statement:r}.sig" ./src-tauri/keys/
+  print "Copied key statement ${statement:t}; list it in BUILT_IN_STATEMENTS in keys.rs"
+done
+
 # Cargo copies resources into target/<profile>/resources but never removes
 # ones deleted here, and the app would try to install a stale bundled module
 # at startup. Remove KJV files there that are no longer in resources.

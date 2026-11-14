@@ -7,12 +7,11 @@
 
 use std::path::Path;
 
-use ed25519_dalek::VerifyingKey;
 use rusqlite::{Connection, OpenFlags};
 
 use super::error::{ModuleError, Result};
 use super::integrity::{self, Manifest, Sidecars};
-use super::keys;
+use super::trust::{self, Trust};
 
 /// The module format version this app reads (`module.formatVersion`).
 pub const SUPPORTED_FORMAT_VERSION: i64 = 2;
@@ -39,7 +38,7 @@ pub struct ModuleDb {
 
 impl ModuleDb {
     /// Opens a module, after checking it against the signed manifest beside
-    /// it with the keys this build trusts.
+    /// it with the keys this app trusts now (`trust.rs`).
     pub fn open(path: &Path) -> Result<Self> {
         let file_name = path
             .file_name()
@@ -49,7 +48,7 @@ impl ModuleDb {
             path,
             &integrity::sidecars(path),
             &file_name,
-            &keys::trusted_module_keys(),
+            &trust::current(),
         )
     }
 
@@ -67,10 +66,10 @@ impl ModuleDb {
         path: &Path,
         sidecars: &Sidecars,
         file_name: &str,
-        keys: &[VerifyingKey],
+        trust: &Trust,
     ) -> Result<Self> {
         let manifest =
-            integrity::verify(path, sidecars, file_name, keys, SUPPORTED_FORMAT_VERSION)?;
+            integrity::verify(path, sidecars, file_name, trust, SUPPORTED_FORMAT_VERSION)?;
         let uri = format!("{}?immutable=1", file_uri(path));
         let flags = OpenFlags::SQLITE_OPEN_READ_ONLY
             | OpenFlags::SQLITE_OPEN_URI
@@ -179,7 +178,7 @@ mod tests {
             path,
             &integrity::sidecars(path),
             &name,
-            &[test_key().verifying_key()],
+            &Trust::only(&[test_key().verifying_key()]),
         )
     }
 

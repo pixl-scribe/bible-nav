@@ -1,4 +1,4 @@
-//! The public keys this app trusts to sign Bible modules.
+//! The public keys this app trusts, and the key statements built into it.
 //!
 //! They're all here, in one place, so a fork can replace them with its own.
 //! See "Keys and revocation" in bible-nav-modules/docs/integrity-spec.md.
@@ -18,11 +18,9 @@ const PRIMARY_KEYS: &[[u8; 32]] = &[
 
 /// The maintainer's backup key (key id 7659eff6260cd7f5), from
 /// bible-nav-modules/keys/backup/public.pem. It never signs modules, so it
-/// isn't trusted for them. It signs only key statements (revoking a primary
-/// key, adding its replacement), which the app doesn't read yet. It's built
-/// in now so that copies released today can trust those statements later.
-#[allow(dead_code)]
-pub const BACKUP_KEY: [u8; 32] = [
+/// isn't trusted for them. It signs only key statements, which revoke
+/// primary keys and add their replacements (`statements.rs`).
+const BACKUP_KEY: [u8; 32] = [
     0x19, 0x43, 0xc1, 0x02, 0x47, 0x3c, 0x5c, 0xa7, 0xbb, 0x13, 0x21, 0xd3, 0xf2, 0xa2, 0x03, 0x84,
     0xe4, 0xc9, 0x83, 0x84, 0x8b, 0x22, 0x96, 0xe6, 0x90, 0x97, 0xd5, 0x5c, 0xb4, 0x31, 0xdd, 0x9e,
 ];
@@ -34,12 +32,52 @@ const DEVELOPMENT_KEY: [u8; 32] = [
     0x4c, 0x24, 0x61, 0x66, 0x7e, 0xde, 0x16, 0xcd, 0x1c, 0xbc, 0x8c, 0xb3, 0x6f, 0xde, 0x22, 0xd0,
 ];
 
-/// The keys whose signature on a module's manifest this build accepts:
-/// the primary keys, plus the development key in development builds.
+/// The development backup key from bible-nav-modules/keys/development-backup,
+/// for testing key statements. Its private key is public, so only
+/// development builds trust it.
+const DEVELOPMENT_BACKUP_KEY: [u8; 32] = [
+    0x26, 0x54, 0xbd, 0xee, 0x0a, 0x53, 0xd6, 0x94, 0x78, 0x95, 0xb3, 0xb2, 0x2d, 0x02, 0x0a, 0x40,
+    0xbe, 0xff, 0xc0, 0xef, 0x30, 0xb5, 0x2b, 0x28, 0x9d, 0x6a, 0x43, 0x24, 0xeb, 0x58, 0xee, 0xd5,
+];
+
+/// Key statements built into this release, from
+/// bible-nav-modules/keys/statements: each one's JSON and `.sig` file. None
+/// exist yet. Add every statement the maintainer publishes, so even a copy
+/// that never meets one in a modules folder knows about it.
+pub const BUILT_IN_STATEMENTS: &[BuiltInStatement] = &[];
+
+/// A key statement compiled into the app with `include_bytes!`.
+pub struct BuiltInStatement {
+    pub name: &'static str,
+    pub statement: &'static [u8],
+    pub signatures: &'static [u8],
+}
+
+/// The keys allowed to sign key statements: the backup key, plus the
+/// development backup key in development builds. Never trusted for modules.
+pub fn backup_keys() -> Vec<VerifyingKey> {
+    let mut raw = vec![BACKUP_KEY];
+    if cfg!(debug_assertions) {
+        raw.push(DEVELOPMENT_BACKUP_KEY);
+    }
+    raw.iter()
+        .filter_map(|bytes| VerifyingKey::from_bytes(bytes).ok())
+        .collect()
+}
+
+/// The development backup key, which signs the shared test vectors.
+#[cfg(test)]
+pub fn development_backup_key() -> VerifyingKey {
+    VerifyingKey::from_bytes(&DEVELOPMENT_BACKUP_KEY).unwrap()
+}
+
+/// The keys built in to sign modules: the primary keys, plus the
+/// development key in development builds. Key statements can revoke them or
+/// add others (`trust.rs` combines them).
 ///
 /// `cfg!(debug_assertions)` is true in development builds (`tauri dev`,
 /// `cargo test`) and false in release builds.
-pub fn trusted_module_keys() -> Vec<VerifyingKey> {
+pub fn built_in_module_keys() -> Vec<VerifyingKey> {
     let mut raw: Vec<[u8; 32]> = PRIMARY_KEYS.to_vec();
     if cfg!(debug_assertions) {
         raw.push(DEVELOPMENT_KEY);
@@ -65,7 +103,7 @@ mod tests {
 
     #[test]
     fn only_development_builds_trust_the_development_key() {
-        let ids: Vec<String> = trusted_module_keys().iter().map(key_id).collect();
+        let ids: Vec<String> = built_in_module_keys().iter().map(key_id).collect();
         // `cargo test` is a development build; `cargo test --release` isn't.
         assert_eq!(
             ids.contains(&"c7703a6f42bedeee".to_string()),
@@ -87,8 +125,43 @@ mod tests {
 
     #[test]
     fn the_backup_key_never_signs_modules() {
-        let ids: Vec<String> = trusted_module_keys().iter().map(key_id).collect();
+        let ids: Vec<String> = built_in_module_keys().iter().map(key_id).collect();
         assert!(ids.contains(&"447d4fa16f501391".to_string()));
         assert!(!ids.contains(&"7659eff6260cd7f5".to_string()));
+    }
+
+    #[test]
+    fn the_development_backup_key_matches_the_generator() {
+        let key = VerifyingKey::from_bytes(&DEVELOPMENT_BACKUP_KEY).unwrap();
+        assert_eq!(key_id(&key), "aecf25562bdc80f3");
+        let backup: Vec<String> = backup_keys().iter().map(key_id).collect();
+        assert_eq!(
+            backup.contains(&"aecf25562bdc80f3".to_string()),
+            cfg!(debug_assertions)
+        );
+        assert!(backup.contains(&"7659eff6260cd7f5".to_string()));
+    }
+
+    #[test]
+    fn every_statement_in_the_keys_folder_is_built_in() {
+        // src-tauri/keys holds the published statements; each must be listed
+        // in BUILT_IN_STATEMENTS, or a release would leave it out.
+        let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("keys");
+        let mut on_disk: Vec<String> = std::fs::read_dir(&folder)
+            .map(|entries| {
+                entries
+                    .filter_map(|entry| entry.ok())
+                    .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                    .filter(|name| name.ends_with(".json"))
+                    .collect()
+            })
+            .unwrap_or_default();
+        on_disk.sort();
+        let mut built_in: Vec<String> = BUILT_IN_STATEMENTS
+            .iter()
+            .map(|statement| statement.name.to_string())
+            .collect();
+        built_in.sort();
+        assert_eq!(on_disk, built_in);
     }
 }

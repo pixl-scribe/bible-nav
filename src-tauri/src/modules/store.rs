@@ -17,8 +17,8 @@ use flate2::read::GzDecoder;
 use super::db::ModuleDb;
 use super::error::{ModuleError, Result};
 use super::integrity::{self, Sidecars};
-use super::keys;
 use super::queries;
+use super::trust;
 
 /// The folder name used inside Documents (or the home folder).
 pub const DEFAULT_FOLDER_NAME: &str = "BibleNav";
@@ -41,6 +41,10 @@ whole .db file, and eng_kjv-1.1.0.manifest.sig holds the signature that
 vouches for it. Keep all three together: Bible Nav opens a module only if
 its manifest is signed by a key it trusts and the file matches it exactly,
 so a damaged or altered copy is refused.
+
+The keys folder holds key statements, if any have been published: signed
+notices that a signing key was revoked and replaced. Keep it with the
+modules when you copy them, so the copies that reach others warn them too.
 
 You're welcome to copy and share these files, to keep God's word in many
 hands. Bible Nav opens them read-only and never changes them.
@@ -152,7 +156,7 @@ fn unpack_and_place(
     // Checked against the bundled manifest before it's put in place. The
     // block ends here, so the module is closed before it's renamed.
     {
-        let db = ModuleDb::open_checked(temp, bundled, file_name, &keys::trusted_module_keys())?;
+        let db = ModuleDb::open_checked(temp, bundled, file_name, &trust::current())?;
         let actual = module_file_name(&queries::module_info(db.conn())?)?;
         if actual != file_name {
             return Err(ModuleError::Unsupported(format!(

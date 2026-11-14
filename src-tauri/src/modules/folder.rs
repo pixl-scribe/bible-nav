@@ -19,6 +19,7 @@ use tauri_plugin_store::StoreExt;
 use super::commands::ModuleRegistry;
 use super::error::{ModuleError, Result};
 use super::store::{self, FolderChoice, InstallOutcome};
+use super::trust;
 
 /// Settings kept in the app's own (hidden) data folder. Only the modules
 /// themselves live in the visible folder.
@@ -27,6 +28,8 @@ const FOLDER_KEY: &str = "folder";
 const NOTICE_KEY: &str = "noticeAcknowledged";
 /// The app's bundled modules (`<id>-<version>.db.gz`) are in this resource folder.
 const BUNDLED_FOLDER: &str = "resources";
+/// Key statements are kept in this folder inside the modules folder.
+const KEYS_FOLDER: &str = "keys";
 
 /// A module the page can use, for display.
 #[derive(Debug, Clone, Serialize)]
@@ -133,6 +136,17 @@ fn load_folder<R: Runtime>(
         show_notice: !choice.portable && read_setting(app, NOTICE_KEY) != Some(json!(true)),
         ..FolderStatus::default()
     };
+
+    // Key statements first, since they decide which keys the module checks
+    // below trust. The app's own copies live in its data folder.
+    let saved = app.path().app_data_dir().ok().map(|dir| dir.join("keys"));
+    let (trust, problems) = trust::load(
+        saved.as_deref(),
+        &choice.path.join(KEYS_FOLDER),
+        !choice.portable,
+    );
+    trust::set_current(trust);
+    status.problems.extend(problems);
 
     // Portable folders may be read-only, so nothing is written to them.
     if !choice.portable && install == Install::Bundled {

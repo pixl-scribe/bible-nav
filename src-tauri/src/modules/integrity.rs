@@ -6,7 +6,7 @@
 //! manifest's exact bytes. See bible-nav-modules/docs/integrity-spec.md.
 //!
 //! A module is trusted only if a key this app trusts signed its manifest
-//! (`keys.rs`), and the file is byte for byte the one the manifest describes.
+//! (`trust.rs`), and the file is byte for byte the one the manifest describes.
 
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -21,6 +21,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 use super::error::{ModuleError, Result};
+use super::trust::Trust;
 
 /// The first field of every manifest, so its signed bytes say what they are.
 pub const MANIFEST_TYPE: &str = "bible-nav module manifest";
@@ -81,7 +82,7 @@ pub fn key_id(key: &VerifyingKey) -> String {
 
 /// Checks a module file against its signed manifest:
 ///
-/// 1. a key in `keys` signed the manifest;
+/// 1. a key `trust` allows signed the manifest;
 /// 2. the manifest is one this app understands, for a format it reads;
 /// 3. the file's name, size, and SHA-256 are those in the manifest.
 ///
@@ -91,7 +92,7 @@ pub fn verify(
     module: &Path,
     sidecars: &Sidecars,
     file_name: &str,
-    keys: &[VerifyingKey],
+    trust: &Trust,
     format_version: i64,
 ) -> Result<Manifest> {
     let manifest_bytes = fs::read(&sidecars.manifest).map_err(|_| {
@@ -106,7 +107,7 @@ pub fn verify(
             display_name(&sidecars.signatures)
         ))
     })?;
-    check_signatures(&manifest_bytes, &signatures, keys)?;
+    check_signatures(&manifest_bytes, &signatures, trust)?;
 
     let manifest: Manifest = serde_json::from_slice(&manifest_bytes)
         .map_err(|error| untrusted(format!("its manifest can't be read: {error}")))?;
@@ -132,9 +133,32 @@ pub fn verify(
 }
 
 /// Succeeds if any line of the signature file is a valid signature of the
-/// manifest by one of `keys`. Lines by other keys, or in a form this app
-/// doesn't know, are ignored: a manifest may carry several signatures.
-fn check_signatures(manifest: &[u8], signatures: &str, keys: &[VerifyingKey]) -> Result<()> {
+/// manifest by a key `trust` allows for it. Lines by other keys, or in a
+/// form this app doesn't know, are ignored: a manifest may carry several
+/// signatures.
+fn check_signatures(manifest: &[u8], signatures: &str, trust: &Trust) -> Result<()> {
+    let known: Vec<VerifyingKey> = trust
+        .trusted
+        .iter()
+        .chain(trust.revoked.iter())
+        .copied()
+        .collect();
+    let signed_by = signers(manifest, signatures, &known);
+    if signed_by.iter().any(|key| trust.allows(key, manifest)) {
+        Ok(())
+    } else if !signed_by.is_empty() {
+        Err(untrusted(
+            "it's signed only by a key that has been revoked".into(),
+        ))
+    } else {
+        Err(untrusted("it isn't signed by a key this app trusts".into()))
+    }
+}
+
+/// The keys among `keys` with a valid signature of `message` in a `.sig`
+/// file's lines. Lines in a form this app doesn't know are skipped.
+pub fn signers(message: &[u8], signatures: &str, keys: &[VerifyingKey]) -> Vec<VerifyingKey> {
+    let mut found = Vec::new();
     for line in signatures.lines() {
         let mut parts = line.split(' ');
         let (Some("ed25519"), Some(id), Some(encoded), None) =
@@ -148,15 +172,18 @@ fn check_signatures(manifest: &[u8], signatures: &str, keys: &[VerifyingKey]) ->
         let Ok(signature) = Signature::from_slice(&bytes) else {
             continue;
         };
-        let valid = keys
-            .iter()
-            .filter(|key| key_id(key) == id)
-            .any(|key| key.verify_strict(manifest, &signature).is_ok());
-        if valid {
-            return Ok(());
+        for key in keys.iter().filter(|key| key_id(key) == id) {
+            if key.verify_strict(message, &signature).is_ok() && !found.contains(key) {
+                found.push(*key);
+            }
         }
     }
-    Err(untrusted("it isn't signed by a key this app trusts".into()))
+    found
+}
+
+/// The first key among `keys` with a valid signature of `message`, if any.
+pub fn signer(message: &[u8], signatures: &str, keys: &[VerifyingKey]) -> Option<VerifyingKey> {
+    signers(message, signatures, keys).into_iter().next()
 }
 
 /// Files already found to match their manifest during this run, with the
@@ -264,7 +291,7 @@ mod tests {
             &path,
             &sidecars(&path),
             "tst-1.0.0.db",
-            &[test_key().verifying_key()],
+            &Trust::only(&[test_key().verifying_key()]),
             FORMAT,
         )
         .unwrap();
@@ -280,7 +307,7 @@ mod tests {
             &path,
             &sidecars(&path),
             "tst-1.0.0.db",
-            &[other.verifying_key()],
+            &Trust::only(&[other.verifying_key()]),
             FORMAT,
         )
         .unwrap_err();
@@ -299,7 +326,7 @@ mod tests {
             &path,
             &sidecars(&path),
             "tst-1.0.0.db",
-            &[test_key().verifying_key()],
+            &Trust::only(&[test_key().verifying_key()]),
             FORMAT,
         )
         .unwrap_err();
@@ -319,7 +346,7 @@ mod tests {
             &path,
             &sidecars(&path),
             "tst-1.0.0.db",
-            &[test_key().verifying_key()],
+            &Trust::only(&[test_key().verifying_key()]),
             FORMAT,
         )
         .unwrap_err();
@@ -337,7 +364,7 @@ mod tests {
             &path,
             &sidecars(&path),
             "tst-2.0.0.db",
-            &[test_key().verifying_key()],
+            &Trust::only(&[test_key().verifying_key()]),
             FORMAT,
         )
         .unwrap_err();
@@ -351,7 +378,7 @@ mod tests {
             &path,
             &sidecars(&path),
             "tst-1.0.0.db",
-            &[test_key().verifying_key()],
+            &Trust::only(&[test_key().verifying_key()]),
             FORMAT,
         )
         .unwrap_err();
@@ -371,7 +398,7 @@ mod tests {
             &path,
             &sidecars(&path),
             "tst-1.0.0.db",
-            &[test_key().verifying_key()],
+            &Trust::only(&[test_key().verifying_key()]),
             FORMAT,
         )
         .unwrap_err();
@@ -389,8 +416,9 @@ mod tests {
         );
         let lines =
             format!("rsa 0123 AAAA\ned25519 nonsense\ned25519 0123456789abcdef !!!\n{good}");
-        assert!(check_signatures(manifest, &lines, &[key.verifying_key()]).is_ok());
-        assert!(check_signatures(manifest, "rsa 0123 AAAA\n", &[key.verifying_key()]).is_err());
+        let trust = Trust::only(&[key.verifying_key()]);
+        assert!(check_signatures(manifest, &lines, &trust).is_ok());
+        assert!(check_signatures(manifest, "rsa 0123 AAAA\n", &trust).is_err());
     }
 
     #[test]
@@ -401,7 +429,7 @@ mod tests {
             &path,
             &sidecars(&path),
             &name,
-            &crate::modules::keys::trusted_module_keys(),
+            &crate::modules::trust::current(),
             FORMAT,
         )
         .expect("the bundled KJV should match its manifest");
