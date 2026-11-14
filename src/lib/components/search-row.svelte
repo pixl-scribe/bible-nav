@@ -91,6 +91,15 @@
 <div
   class="flex justify-between text-xs text-base-content/60 w-full px-2 pb-2 border-b border-base-content/10"
 >
-  <div>{bibleTextService?.moduleName}</div>
+  <div>
+    {#if bibleTextService?.moduleName}
+      {$_('module.nameAndVersion', {
+        values: {
+          name: bibleTextService.moduleName,
+          version: bibleTextService.moduleVersion,
+        },
+      })}
+    {/if}
+  </div>
   <div>{bibleTextService?.referenceLabel}</div>
 </div>

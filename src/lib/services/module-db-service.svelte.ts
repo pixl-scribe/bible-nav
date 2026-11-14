@@ -82,11 +82,12 @@ function split<T>(items: T[], position: (item: T) => number): TextWindow<T> {
 export default class ModuleDbService {
   constructor(private moduleId: string) {}
 
-  public async getModuleName(): Promise<string> {
+  /** The module's display name and version, such as "1.1.0". */
+  public async getModuleInfo(): Promise<{ name: string; version: string }> {
     const info = await invoke<ModuleInfo>('module_info', {
       moduleId: this.moduleId,
     });
-    return info.name;
+    return { name: info.name, version: info.version };
   }
 
   public async getBooks(): Promise<Record<string, Book>> {

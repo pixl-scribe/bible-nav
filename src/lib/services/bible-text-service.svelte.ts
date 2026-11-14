@@ -61,6 +61,8 @@ export default class BibleTextService {
   public selectInProgress = $state<boolean>(true);
   public adjustingScrollPct = $state<boolean>(false);
   public moduleName = $state<string>('');
+  /** The module's version, such as "1.1.0". */
+  public moduleVersion = $state<string>('');
   /** A short name for the module, such as "KJV". */
   public moduleAbbreviation = $state<string>('');
   /** The verse to highlight, after a Notes tab heading took the reader there. */
@@ -498,7 +500,9 @@ export default class BibleTextService {
   }
 
   private async getModule(): Promise<void> {
-    this.moduleName = await this.moduleDbService.getModuleName();
+    const info = await this.moduleDbService.getModuleInfo();
+    this.moduleName = info.name;
+    this.moduleVersion = info.version;
     this.moduleAbbreviation = moduleAbbreviation(this.moduleName);
   }
 

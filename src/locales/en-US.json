@@ -16,6 +16,7 @@
   "parallel.close-tab": "Close {title}",
   "parallel.empty": "Add a parallel text or tool with +.",
   "parallel.all-open": "Every available tab is open.",
+  "module.nameAndVersion": "{name} · v{version}",
   "notes.tab": "{abbr} notes",
   "notes.hint": "Footnotes for the chapter in view",
   "notes.heading": "{abbr} notes · {chapter}",

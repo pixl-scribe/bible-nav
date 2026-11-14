@@ -16,6 +16,7 @@
   "parallel.close-tab": "[!!Ćĺōśē {title}!!]",
   "parallel.empty": "[!!Àďď à ƥàŕàĺĺēĺ ţēxţ ōŕ ţōōĺ ŵĩţĥ +.!!]",
   "parallel.all-open": "[!!Ēvēŕŷ àvàĩĺàƀĺē ţàƀ ĩś ōƥēń.!!]",
+  "module.nameAndVersion": "[!!{name} · v{version}!!]",
   "notes.tab": "[!!{abbr} ńōţēś!!]",
   "notes.hint": "[!!Ƒōōţńōţēś ƒōŕ ţĥē ćĥàƥţēŕ ĩń vĩēŵ!!]",
   "notes.heading": "[!!{abbr} ńōţēś · {chapter}!!]",
