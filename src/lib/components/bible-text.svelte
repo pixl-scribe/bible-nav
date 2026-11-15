@@ -9,6 +9,7 @@
   import Verse from './verse.svelte';
   import SearchRow from './search-row.svelte';
   import FootnoteTooltip from './footnote-tooltip.svelte';
+  import TipTooltip from './tip-tooltip.svelte';
   import type { MenuSection } from './module-menu.svelte';
   import {
     appSettingsService,
@@ -67,6 +68,11 @@
   } = $props();
 
   let bibleTextService = $state<BibleTextService | undefined>();
+  let summary = $state<HTMLElement | undefined>();
+  /** A word search's words, without its quotes, for the summary. */
+  const searchWords = $derived(
+    (bibleTextService?.wordSearch ?? '').replace(/["\u201C\u201D]/g, '').trim()
+  );
   const textMaxWidth = $derived(textMaxWidths[appSettingsService.textWidth]);
   let scrollableElement = $state<HTMLElement | undefined>();
 
@@ -206,8 +212,25 @@
     maintaining = true;
     try {
       if (svc.mode === 'list') {
-        const below = pane.scrollHeight - pane.scrollTop - pane.clientHeight;
-        if (below < pane.clientHeight) await svc.loadMoreList();
+        // A list can start anywhere, so it grows both ways, like chapters.
+        for (let step = 0; step < 4; step++) {
+          const screen = pane.clientHeight;
+          const below = pane.scrollHeight - pane.scrollTop - screen;
+          if (below < screen && (await svc.extendList(1))) {
+            await tick();
+            continue;
+          }
+          if (pane.scrollTop < screen) {
+            const before = pane.scrollHeight;
+            if (await svc.extendList(-1)) {
+              await tick();
+              pane.scrollTop += pane.scrollHeight - before;
+              continue;
+            }
+          }
+          break;
+        }
+        await trimList();
         return;
       }
       if (svc.mode !== 'chapters' || svc.chapters.length === 0) return;
@@ -291,6 +314,51 @@
     }
     if (back > 0) svc.drop(back, false);
   }
+
+  /**
+   * Drops list verses more than two screens away, a page or so at a time,
+   * so a long scroll through a big search doesn't keep thousands of verses
+   * on the page.
+   */
+  async function trimList() {
+    const pane = scrollableElement;
+    const svc = bibleTextService;
+    if (!pane || !svc || svc.listVerses.length <= 3 * dropBatch) return;
+    const area = pane.getBoundingClientRect();
+    const reach = pane.clientHeight * 2;
+    const verses = svc.listVerses;
+    let front = 0;
+    while (front < verses.length) {
+      const element = findVerse(verses[front].sid);
+      if (
+        !element ||
+        element.getBoundingClientRect().bottom > area.top - reach
+      ) {
+        break;
+      }
+      front++;
+    }
+    let back = 0;
+    while (back < verses.length - front) {
+      const element = findVerse(verses[verses.length - 1 - back].sid);
+      if (
+        !element ||
+        element.getBoundingClientRect().top < area.bottom + reach
+      ) {
+        break;
+      }
+      back++;
+    }
+    if (front >= dropBatch) {
+      const before = pane.scrollHeight;
+      svc.dropList(front, true);
+      await tick();
+      pane.scrollTop -= before - pane.scrollHeight;
+    }
+    if (back >= dropBatch) svc.dropList(back, false);
+  }
+  /** List verses dropped at once, at least: dropping is a page change. */
+  const dropBatch = 50;
 
   let framePending = false;
   function onScroll() {
@@ -420,14 +488,15 @@
     svc: BibleTextService,
     element: HTMLElement
   ) {
-    if (svc.mode !== 'chapters') return;
     for (let step = 0; step < 6; step++) {
       const fromTop =
         element.getBoundingClientRect().top -
         pane.getBoundingClientRect().top +
         pane.scrollTop;
       if (pane.scrollHeight - fromTop >= pane.clientHeight) return;
-      if (!(await svc.extend(1))) return;
+      const grew =
+        svc.mode === 'chapters' ? await svc.extend(1) : await svc.extendList(1);
+      if (!grew) return;
       await tick();
     }
   }
@@ -460,6 +529,31 @@
       <ModuleMessage error={bibleTextService.loadError} />
     </div>
   {/if}
+  {#if showSearch && bibleTextService?.wordSearch !== undefined}
+    <!-- A word search's summary: how many verses, in how many books. -->
+    <div
+      class="border-b border-base-content/10 px-4 py-1.5 text-sm text-base-content/60"
+      aria-live="polite"
+      bind:this={summary}
+    >
+      {#if bibleTextService.loading && bibleTextService.listTotal === 0}
+        {$_('search.searching')}
+      {:else if bibleTextService.listTotal === 0}
+        {$_('search.none', { values: { words: searchWords } })}
+      {:else}
+        <span data-tip={$_('search.forms')}>
+          {$_('search.summary', {
+            values: {
+              count: bibleTextService.listTotal,
+              words: searchWords,
+              books: bibleTextService.hits?.byBook.size ?? 0,
+            },
+          })}
+        </span>
+      {/if}
+    </div>
+    <TipTooltip root={summary} placement="bottom" />
+  {/if}
   <div class="flex min-h-0 w-full flex-1 pt-2 pl-2 pb-2">
     <div
       class="reading-scroll h-full flex-1 overflow-y-auto overflow-x-hidden pr-2 text-lg leading-relaxed"
@@ -489,10 +583,6 @@
           {#each bibleTextService.listVerses as verse (verse.sid)}
             <Verse {verse} {bibleTextService} />
           {/each}
-        {:else if bibleTextService?.mode === 'text'}
-          <p class="m-6 text-center text-base text-base-content/60">
-            {$_('bible-text.word-search-later')}
-          </p>
         {/if}
       </div>
     </div>

@@ -40,25 +40,34 @@
   let service = $state<BibleTextService | undefined>();
   let element = $state<HTMLElement>();
 
-  // Mirror the main text's mode: its list, or chapters at its place.
+  // Mirror the main text: chapters at its place, or the same verses as its
+  // list (a reference list or a word search), shown from this Bible. The
+  // list is the main text's own verses, so a word search here shows the
+  // same verses even where this translation words them differently.
   // Opening beside a list, start at the main text's verse; after that, a
   // new list starts at its top, like the main text (whose top verse is
   // still the old one while its new list loads).
   let opening = true;
   $effect(() => {
     const mode = main?.mode;
-    const osis = main?.listOsis;
+    const sids = main?.listSids;
+    const key = main?.listKey;
     if (!service || !main) return;
     untrack(() => {
       if (!service || !main) return;
-      if (mode === 'list' && osis) {
-        if (service.mode !== 'list' || service.listOsis !== osis) {
-          service.showList(osis, opening ? main.topSid : undefined);
+      if (mode === 'list' && sids) {
+        const showing =
+          service.mode === 'list' &&
+          service.listSource?.kind === 'sids' &&
+          service.listSource.sids === sids;
+        if (!showing) {
+          service.showList(
+            { kind: 'sids', sids, key: `sids:${key}` },
+            opening ? main.topSid : undefined
+          );
         }
       } else if (mode === 'chapters' && service.mode !== 'chapters') {
         service.openAt(main.topSid ?? main.browseSid);
-      } else if (mode === 'text' && service.mode !== 'text') {
-        service.showText();
       }
       opening = false;
     });

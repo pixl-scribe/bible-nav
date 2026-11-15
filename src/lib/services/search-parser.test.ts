@@ -32,5 +32,27 @@ describe('parseSearch', () => {
 
   test('anything else is a word search', () => {
     expect(parseSearch('grace')).toEqual({ searchType: 'text', text: 'grace' });
+    expect(parseSearch('faith hope')).toMatchObject({ searchType: 'text' });
+  });
+
+  test('a book name on its own is the book, but in quotes it is the word', () => {
+    expect(parseSearch('job')).toMatchObject({ searchType: 'point' });
+    expect(parseSearch('"job"')).toEqual({ searchType: 'text', text: '"job"' });
+    expect(parseSearch('\u201Cmark\u201D')).toMatchObject({
+      searchType: 'text',
+    });
+  });
+
+  test('a reference must be the whole search', () => {
+    expect(parseSearch('job patience')).toMatchObject({ searchType: 'text' });
+    expect(parseSearch('rom 8:28 love')).toMatchObject({ searchType: 'text' });
+    expect(parseSearch('Job 42')).toEqual({
+      searchType: 'point',
+      sid: 'JOB 42:1',
+    });
+    expect(parseSearch('gen 1:1;')).toMatchObject({ searchType: 'point' });
+    expect(parseSearch('John 3:16, Romans 8')).toMatchObject({
+      searchType: 'ref',
+    });
   });
 });

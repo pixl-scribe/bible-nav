@@ -144,6 +144,54 @@ export default class ModuleDbService {
     return rows.map((row) => toVerse(row));
   }
 
+  /** Every verse matching a word search, in Bible order. */
+  public async getTextSids(search: string): Promise<string[]> {
+    return invoke<string[]>('text_sids', { moduleId: this.moduleId, search });
+  }
+
+  /**
+   * A page of a word search's verses: `limit` of them from result number
+   * `offset`, each with the words that matched in it.
+   */
+  public async getTextVerses(
+    search: string,
+    offset: number,
+    limit: number
+  ): Promise<Verse[]> {
+    const rows = await invoke<VerseRow[]>('text_verses', {
+      moduleId: this.moduleId,
+      search,
+      offset,
+      limit,
+    });
+    return rows.map((row) => toVerse(row));
+  }
+
+  /**
+   * The verses with these sids, in the order given, leaving out any this
+   * module doesn't have: a parallel text showing the main text's results.
+   */
+  public async getVersesForSids(sids: string[]): Promise<Verse[]> {
+    if (sids.length === 0) return [];
+    const rows = await invoke<VerseRow[]>('verses_for_sids', {
+      moduleId: this.moduleId,
+      sids,
+    });
+    return rows.map((row) => toVerse(row));
+  }
+
+  /** Words beginning with `prefix`, with how many verses have each. */
+  public async getWordSuggestions(
+    prefix: string,
+    limit: number
+  ): Promise<{ word: string; verses: number }[]> {
+    return invoke('word_suggestions', {
+      moduleId: this.moduleId,
+      prefix,
+      limit,
+    });
+  }
+
   /** Every verse sid in an OSIS reference such as 'John.3.16-John.3.18'. */
   public async getSidsByRef(osisRef: string): Promise<string[]> {
     const ranges = osisToRanges(osisRef);

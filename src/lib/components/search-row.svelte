@@ -125,17 +125,38 @@
       {/if}
     {/if}
     {#if bibleTextService && bibleTextService.autoCompleteOptions.length > 0}
+      <!-- Books first, then words; each says what it opens. -->
       <ul
-        class="menu menu-sm bg-base-100 rounded-box w-56 absolute top-12 left-2 z-40 border border-base-content/20 shadow-md"
+        class="menu menu-sm bg-base-100 rounded-box w-72 absolute top-12 left-2 z-40 border border-base-content/20 shadow-md"
       >
         {#each bibleTextService.autoCompleteOptions as option, i (i)}
-          <li class={{ 'bg-primary': option.selected }}>
-            <button onclick={() => onClickAutoComplete(option)}>
-              {#if option.type === 'ref'}
-                <span class="text-base-content/60">{$_('bible-text.book')}</span
-                >
+          <li
+            class={[
+              'rounded-field',
+              option.selected && 'bg-primary text-primary-content',
+            ]}
+          >
+            <button
+              class="flex items-baseline gap-2"
+              onclick={() => onClickAutoComplete(option)}
+            >
+              <span class="w-10 shrink-0 text-xs opacity-70">
+                {option.type === 'ref'
+                  ? $_('autocomplete.book')
+                  : $_('autocomplete.word')}
+              </span>
+              <span class="flex-1 font-semibold">{option.value}</span>
+              {#if option.count !== undefined}
+                <span class="text-xs opacity-70">
+                  {option.type === 'ref'
+                    ? $_('autocomplete.chapters', {
+                        values: { count: option.count },
+                      })
+                    : $_('autocomplete.verses', {
+                        values: { count: option.count },
+                      })}
+                </span>
               {/if}
-              {option.value}
             </button>
           </li>
         {/each}
@@ -168,9 +189,13 @@
       service={bibleTextService}
       onopenpicker={() => picker?.open()}
     />
-    <ReferencePicker bind:this={picker} service={bibleTextService} />
   {:else}
     <!-- A parallel text follows the main text: its place is shown only. -->
     <div class="shrink-0">{bibleTextService?.referenceLabel}</div>
   {/if}
 </div>
+{#if showSearch && bibleTextService}
+  <!-- Outside the row above: a dialog still inherits text styles from where
+       it sits in the page, and that row's text is small and dimmed. -->
+  <ReferencePicker bind:this={picker} service={bibleTextService} />
+{/if}

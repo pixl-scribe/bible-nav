@@ -18,6 +18,7 @@ use tauri::State;
 use super::db::ModuleDb;
 use super::error::{ModuleError, Result};
 use super::queries::{self, Book, BookOutline, IndexedVerse, ModuleInfo, RefRange, VerseRow};
+use super::search::{self, WordSuggestion};
 
 /// The modules currently open, by id (such as "eng_kjv").
 ///
@@ -128,6 +129,62 @@ pub async fn ref_verses(
 ) -> Result<Vec<IndexedVerse>> {
     run(&registry, &module_id, move |conn| {
         queries::ref_verses(conn, &ranges, offset, limit)
+    })
+    .await
+}
+
+/// Every verse matching a word search, in Bible order (see `search`).
+#[tauri::command]
+pub async fn text_sids(
+    registry: State<'_, ModuleRegistry>,
+    module_id: String,
+    search: String,
+) -> Result<Vec<String>> {
+    run(&registry, &module_id, move |conn| {
+        search::text_sids(conn, &search)
+    })
+    .await
+}
+
+/// One page of a word search's verses, with the words that matched.
+#[tauri::command]
+pub async fn text_verses(
+    registry: State<'_, ModuleRegistry>,
+    module_id: String,
+    search: String,
+    offset: u32,
+    limit: u32,
+) -> Result<Vec<IndexedVerse>> {
+    run(&registry, &module_id, move |conn| {
+        search::text_verses(conn, &search, offset, limit)
+    })
+    .await
+}
+
+/// The verses with these sids, in order, skipping any this module lacks:
+/// a parallel text showing another Bible's search results.
+#[tauri::command]
+pub async fn verses_for_sids(
+    registry: State<'_, ModuleRegistry>,
+    module_id: String,
+    sids: Vec<String>,
+) -> Result<Vec<VerseRow>> {
+    run(&registry, &module_id, move |conn| {
+        search::verses_for_sids(conn, &sids)
+    })
+    .await
+}
+
+/// Words beginning with what's typed, with how many verses have each.
+#[tauri::command]
+pub async fn word_suggestions(
+    registry: State<'_, ModuleRegistry>,
+    module_id: String,
+    prefix: String,
+    limit: u32,
+) -> Result<Vec<WordSuggestion>> {
+    run(&registry, &module_id, move |conn| {
+        search::word_suggestions(conn, &prefix, limit)
     })
     .await
 }

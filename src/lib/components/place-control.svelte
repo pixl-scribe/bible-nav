@@ -23,6 +23,7 @@
   import { _ } from 'svelte-i18n';
   import type BibleTextService from '$lib/services/bible-text-service.svelte';
   import TipTooltip from './tip-tooltip.svelte';
+  import { hitChapterStep } from '$lib/services/search-hits';
 
   let {
     service,
@@ -35,9 +36,11 @@
 
   let element = $state<HTMLElement>();
 
-  const showArrows = $derived(service.mode === 'chapters');
-  const previous = $derived(service.chapterStep(-1));
-  const next = $derived(service.chapterStep(1));
+  // Reading chapters, the arrows step chapter by chapter; in a word search
+  // they step between chapters that have matches. A reference list has no
+  // arrows: its verses are only those listed.
+  const searching = $derived(service.wordSearch !== undefined);
+  const showArrows = $derived(service.mode === 'chapters' || searching);
   const fullPlace = $derived(
     service.topSid ? service.formatRefFromSid(service.topSid) : ''
   );
@@ -48,20 +51,59 @@
     return service.formatChapterFromSid(`${chapterSid}:1`);
   }
 
+  /** Where an arrow goes: a verse, and its tooltip. */
+  interface Step {
+    sid: string;
+    tip: string;
+  }
+
+  function target(direction: 1 | -1): Step | undefined {
+    const key = direction === 1 ? 'next' : 'previous';
+    if (searching) {
+      const hits = service.hits;
+      const from = service.topSid;
+      const chapter =
+        hits && from ? hitChapterStep(hits, from, direction) : undefined;
+      if (!chapter) return undefined;
+      return {
+        sid: chapter.first,
+        tip: $_(`place.${key}-match`, {
+          values: {
+            chapter: chapterName(chapter.chapter),
+            count: chapter.count,
+          },
+        }),
+      };
+    }
+    const chapter = service.chapterStep(direction);
+    if (!chapter) return undefined;
+    return {
+      sid: `${chapter}:1`,
+      tip: $_(`place.${key}`, { values: { chapter: chapterName(chapter) } }),
+    };
+  }
+
+  const previous = $derived(target(-1));
+  const next = $derived(target(1));
   const here = $derived(chapterName(service.placeChapter));
   const previousTip = $derived(
-    previous
-      ? $_('place.previous', { values: { chapter: chapterName(previous) } })
-      : $_('place.first', { values: { chapter: here } })
+    previous?.tip ??
+      (searching
+        ? $_('place.no-earlier-match')
+        : $_('place.first', { values: { chapter: here } }))
   );
   const nextTip = $derived(
-    next
-      ? $_('place.next', { values: { chapter: chapterName(next) } })
-      : $_('place.last', { values: { chapter: here } })
+    next?.tip ??
+      (searching
+        ? $_('place.no-later-match')
+        : $_('place.last', { values: { chapter: here } }))
   );
 
   function step(direction: 1 | -1) {
-    if (service.chapterStep(direction)) service.stepChapter(direction);
+    const to = direction === 1 ? next : previous;
+    if (!to) return;
+    if (searching) service.goToListSid(to.sid);
+    else service.stepChapter(direction);
   }
 
   // Where the arrow keys mustn't step chapters: typing, menus, tab strips,

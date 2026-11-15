@@ -73,6 +73,12 @@ export interface Verse {
    */
   headingsBefore: Heading[];
   headingsAfter: Heading[];
+  /**
+   * For a word search, the words in this verse that matched, as written:
+   * with stemming they can differ from what was typed ("covenants" for
+   * "covenant"). The page highlights them.
+   */
+  matches?: string[];
 }
 
 /**
@@ -109,6 +115,7 @@ export interface VerseRow {
   noteStart: number;
   headingsBefore: HeadingRow[];
   headingsAfter: HeadingRow[];
+  matches?: string[];
 }
 
 export interface HeadingRow {

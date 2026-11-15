@@ -58,6 +58,18 @@ describe('verse rendering', () => {
     }
   );
 
+  test.each(samples.verses.map((v) => v.sid))(
+    '%s keeps its text with search matches highlighted',
+    (sid) => {
+      const sample = samples.verses.find((v) => v.sid === sid)!;
+      // Highlight a few common words, as a word search would.
+      const verse = { ...toVerse(sample), matches: ['the', 'LORD', 'and'] };
+      const { body } = render(VerseText, { props: { verse } });
+      expect(visibleText(body)).toBe(sample.raw);
+      if (/\bthe\b/i.test(sample.raw)) expect(body).toContain('<mark');
+    }
+  );
+
   test('shows translator additions in italics and words of Jesus in red', () => {
     const psalm = samples.verses.find((v) => v.sid === 'PSA 23:1')!;
     expect(

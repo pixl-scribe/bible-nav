@@ -73,11 +73,53 @@
   const chapters = $derived(numbers(chosen?.verses.length ?? 0));
   const verses = $derived(numbers(chosen?.verses[chapter - 1] ?? 0));
   const hereSid = $derived(`${here.book} ${here.chapter}:${here.verse}`);
+  /**
+   * While a list is shown (a word search or a reference list), the picker
+   * goes to its verses only: books and chapters show how many of their
+   * verses are listed, and places with none are dimmed and can't be picked.
+   */
+  const hits = $derived(service.hits);
+  // Recent places would leave the list, so they're left out while one is
+  // shown.
   const recent = $derived(
-    recentPlaces.places.filter(
-      (sid) => sid !== hereSid && service.books[sid.split(' ')[0]]
-    )
+    hits
+      ? []
+      : recentPlaces.places.filter(
+          (sid) => sid !== hereSid && service.books[sid.split(' ')[0]]
+        )
   );
+
+  function bookCount(code: string): number {
+    return hits?.byBook.get(code) ?? 0;
+  }
+
+  function chapterCount(n: number): number {
+    return hits?.byChapter.get(`${book} ${n}`) ?? 0;
+  }
+
+  /** Whether a cell can be picked: anything, unless a list is shown. */
+  function pickable(column: Column, key: string): boolean {
+    if (!hits) return true;
+    if (column === 'book') return bookCount(key) > 0;
+    if (column === 'chapter') return chapterCount(Number(key)) > 0;
+    return hits.verses.has(`${book} ${chapter}:${key}`);
+  }
+
+  /** The first chapter of a book to show: its first listed one, or 1. */
+  function firstChapter(code: string): number {
+    const first = hits?.firstInBook.get(code);
+    return first ? parse(first).chapter : 1;
+  }
+
+  /** The first verse of a chapter to land on: its first listed one, or 1. */
+  function firstVerse(code: string, n: number): number {
+    if (!hits) return 1;
+    const count = books.find((b) => b.code === code)?.verses[n - 1] ?? 0;
+    for (let v = 1; v <= count; v++) {
+      if (hits.verses.has(`${code} ${n}:${v}`)) return v;
+    }
+    return 1;
+  }
 
   function numbers(count: number): number[] {
     return Array.from({ length: count }, (_, i) => i + 1);
@@ -118,21 +160,37 @@
   }
 
   function chooseBook(code: string) {
+    if (!pickable('book', code)) return;
+    const n = firstChapter(code);
     book = code;
-    chapter = 1;
+    chapter = n;
     verse = undefined;
-    stops = { book: code, chapter: '1', verse: '1' };
+    stops = {
+      book: code,
+      chapter: String(n),
+      verse: String(firstVerse(code, n)),
+    };
   }
 
   function chooseChapter(n: number) {
+    if (!pickable('chapter', String(n))) return;
     chapter = n;
     verse = undefined;
-    stops = { ...stops, chapter: String(n), verse: '1' };
+    stops = {
+      ...stops,
+      chapter: String(n),
+      verse: String(firstVerse(book, n)),
+    };
   }
 
+  /**
+   * Goes to a verse: within the list while one is shown, otherwise to read
+   * chapters from there.
+   */
   function go(sid: string) {
     dialog?.close();
-    service.goTo(sid);
+    if (hits) service.goToListSid(sid);
+    else service.goTo(sid);
   }
 
   /**
@@ -140,24 +198,33 @@
    * first chapter or verse; on a verse, go there.
    */
   async function enter(column: Column, key: string) {
+    if (!pickable(column, key)) return;
     if (column === 'book') {
       chooseBook(key);
       await tick();
-      cell('chapter', '1')?.focus();
+      cell('chapter', stops.chapter)?.focus();
     } else if (column === 'chapter') {
       chooseChapter(Number(key));
       await tick();
-      cell('verse', '1')?.focus();
+      cell('verse', stops.verse)?.focus();
     } else {
       go(`${book} ${chapter}:${key}`);
     }
   }
 
-  /** A double-click: go to the start of a book or chapter. */
+  /**
+   * A double-click: go to the start of a book or chapter, or, while a list
+   * is shown, to its first listed verse there.
+   */
   function activate(column: Column, key: string) {
-    if (column === 'book') go(`${key} 1:1`);
-    else if (column === 'chapter') go(`${book} ${key}:1`);
-    else go(`${book} ${chapter}:${key}`);
+    if (!pickable(column, key)) return;
+    if (column === 'book') {
+      go(hits?.firstInBook.get(key) ?? `${key} 1:1`);
+    } else if (column === 'chapter') {
+      go(`${book} ${key}:${firstVerse(book, Number(key))}`);
+    } else {
+      go(`${book} ${chapter}:${key}`);
+    }
   }
 
   /**
@@ -193,7 +260,12 @@
 
   function onColumnKey(event: KeyboardEvent, column: Column) {
     const area = event.currentTarget as HTMLElement;
-    const cells = [...area.querySelectorAll<HTMLElement>('button[data-key]')];
+    // Dimmed cells are skipped: there's nothing listed there to go to.
+    const cells = [
+      ...area.querySelectorAll<HTMLElement>(
+        'button[data-key]:not([aria-disabled="true"])'
+      ),
+    ];
     const current = document.activeElement as HTMLElement;
     const index = cells.indexOf(current);
     if (index < 0) return;
@@ -255,7 +327,9 @@
     }
     const flat = (text: string) => text.toLowerCase().replace(/\s+/g, '');
     const match = books.find(
-      (b) => flat(b.name).startsWith(typed) || flat(b.short).startsWith(typed)
+      (b) =>
+        pickable('book', b.code) &&
+        (flat(b.name).startsWith(typed) || flat(b.short).startsWith(typed))
     );
     if (!match) return;
     event.preventDefault();
@@ -273,15 +347,33 @@
     return String(place < 5 ? place + 1 : place + 2);
   }
 
-  function cellClass(picked: boolean, isHere: boolean) {
+  function cellClass(
+    picked: boolean,
+    isHere: boolean,
+    enabled = true,
+    height = 'h-8'
+  ) {
     return [
       // Raised while focused, so its neighbours can't cover its outline.
-      'relative h-8 min-w-0 rounded-field border px-0 text-sm tabular-nums focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary',
+      'relative flex min-w-0 flex-col overflow-hidden rounded-field border px-0 text-sm tabular-nums focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary',
+      height,
+      !enabled
+        ? 'cursor-default border-transparent bg-transparent text-base-content/30'
+        : picked
+          ? 'border-primary bg-primary font-semibold text-primary-content'
+          : isHere
+            ? 'border-primary/70 bg-primary/15'
+            : 'border-base-content/10 bg-base-content/5 hover:bg-base-content/10',
+    ];
+  }
+
+  /** A listed place's count, in a band across the bottom of its cell. */
+  function bandClass(picked: boolean) {
+    return [
+      'flex flex-1 items-center justify-center text-[0.6875rem] leading-none font-bold',
       picked
-        ? 'border-primary bg-primary font-semibold text-primary-content'
-        : isHere
-          ? 'border-primary/70 bg-primary/15'
-          : 'border-base-content/10 bg-base-content/5 hover:bg-base-content/10',
+        ? 'bg-black/20 text-primary-content'
+        : 'border-t border-primary/35 bg-primary/20 text-primary',
     ];
   }
 </script>
@@ -289,17 +381,32 @@
 {#snippet bookGrid(list: typeof books)}
   <div class="grid grid-cols-8 gap-1.5">
     {#each list as b (b.code)}
+      {@const count = bookCount(b.code)}
+      {@const enabled = pickable('book', b.code)}
       <button
         type="button"
         data-key={b.code}
         tabindex={stops.book === b.code ? 0 : -1}
-        class={cellClass(b.code === book, b.code === here.book)}
-        data-tip={$_('picker.book-tip', { values: { name: b.name } })}
+        class={cellClass(
+          b.code === book,
+          b.code === here.book,
+          enabled,
+          hits ? 'h-11' : 'h-8'
+        )}
+        data-tip={!hits
+          ? $_('picker.book-tip', { values: { name: b.name } })
+          : count
+            ? $_('picker.book-hits', { values: { name: b.name, count } })
+            : $_('picker.book-none', { values: { name: b.name } })}
         aria-label={b.name}
         aria-pressed={b.code === book}
+        aria-disabled={!enabled}
         aria-current={b.code === here.book ? 'location' : undefined}
         onclick={() => chooseBook(b.code)}
-        ondblclick={() => activate('book', b.code)}>{b.short}</button
+        ondblclick={() => activate('book', b.code)}
+        ><span class="flex flex-[2] items-center justify-center">{b.short}</span
+        >{#if count}<span class={bandClass(b.code === book)}>{count}</span
+          >{/if}</button
       >
     {/each}
   </div>
@@ -309,7 +416,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     bind:this={box}
-    class="modal-box flex h-[calc(100dvh-3rem)] max-h-none w-[calc(100vw-3rem)] max-w-none flex-col gap-0 overflow-hidden p-0"
+    class="modal-box flex text-base text-base-content h-[calc(100dvh-3rem)] max-h-none w-[calc(100vw-3rem)] max-w-none flex-col gap-0 overflow-hidden p-0"
     onkeydown={onDialogKey}
   >
     <div
@@ -318,10 +425,27 @@
       <h2 id="picker-title" class="text-xl font-bold">
         {$_('picker.title')}
       </h2>
-      <span class="text-sm text-base-content/60">
-        {$_('picker.now', {
-          values: { place: service.formatRefFromSid(hereSid) },
-        })}
+      <span class="text-sm">
+        {#if service.wordSearch !== undefined}
+          {$_('picker.now-search', {
+            values: {
+              words: service.wordSearch.replace(/["\u201C\u201D]/g, ''),
+              count: service.listTotal,
+              place: service.formatRefFromSid(hereSid),
+            },
+          })}
+        {:else if hits}
+          {$_('picker.now-list', {
+            values: {
+              count: service.listTotal,
+              place: service.formatRefFromSid(hereSid),
+            },
+          })}
+        {:else}
+          {$_('picker.now', {
+            values: { place: service.formatRefFromSid(hereSid) },
+          })}
+        {/if}
       </span>
       <span class="flex-1"></span>
       <span class="hidden text-xs text-base-content/60 sm:inline">
@@ -410,24 +534,38 @@
           onfocusin={(event) => onColumnFocus(event, 'chapter')}
         >
           {#each chapters as n (n)}
+            {@const count = chapterCount(n)}
+            {@const enabled = pickable('chapter', String(n))}
             <button
               type="button"
               data-key={n}
               tabindex={stops.chapter === String(n) ? 0 : -1}
               style:grid-column={tensColumn(n)}
-              class={[
-                cellClass(
-                  n === chapter,
-                  book === here.book && n === here.chapter
-                ),
-              ]}
-              data-tip={$_('picker.chapter-tip', {
-                values: { place: `${bookName} ${n}:1` },
-              })}
+              class={cellClass(
+                n === chapter,
+                book === here.book && n === here.chapter,
+                enabled,
+                hits ? 'h-10' : 'h-8'
+              )}
+              data-tip={!hits
+                ? $_('picker.chapter-tip', {
+                    values: { place: `${bookName} ${n}:1` },
+                  })
+                : count
+                  ? $_('picker.chapter-hits', {
+                      values: { place: `${bookName} ${n}`, count },
+                    })
+                  : $_('picker.chapter-none', {
+                      values: { place: `${bookName} ${n}` },
+                    })}
               aria-label={`${bookName} ${n}`}
               aria-pressed={n === chapter}
+              aria-disabled={!enabled}
               onclick={() => chooseChapter(n)}
-              ondblclick={() => activate('chapter', String(n))}>{n}</button
+              ondblclick={() => activate('chapter', String(n))}
+              ><span class="flex flex-[2] items-center justify-center">{n}</span
+              >{#if count}<span class={bandClass(n === chapter)}>{count}</span
+                >{/if}</button
             >
           {/each}
         </div>
@@ -449,21 +587,24 @@
           onfocusin={(event) => onColumnFocus(event, 'verse')}
         >
           {#each verses as v (v)}
+            {@const enabled = pickable('verse', String(v))}
             <button
               type="button"
               data-key={v}
               tabindex={stops.verse === String(v) ? 0 : -1}
               style:grid-column={tensColumn(v)}
-              class={[
-                cellClass(
-                  v === verse,
-                  book === here.book &&
-                    chapter === here.chapter &&
-                    v === here.verse
-                ),
-              ]}
+              class={cellClass(
+                v === verse,
+                book === here.book &&
+                  chapter === here.chapter &&
+                  v === here.verse,
+                enabled
+              )}
               aria-label={`${bookName} ${chapter}:${v}`}
-              onclick={() => go(`${book} ${chapter}:${v}`)}>{v}</button
+              aria-disabled={!enabled}
+              onclick={() => enabled && go(`${book} ${chapter}:${v}`)}
+              ><span class="flex flex-1 items-center justify-center">{v}</span
+              ></button
             >
           {/each}
         </div>
@@ -473,7 +614,7 @@
     <div
       class="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-base-content/10 px-5 py-2 text-xs text-base-content/60"
     >
-      <span>{$_('picker.help')}</span>
+      <span>{hits ? $_('picker.help-hits') : $_('picker.help')}</span>
       <span class="flex-1"></span>
       <span>{$_('picker.keyboard')}</span>
     </div>

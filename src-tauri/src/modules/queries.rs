@@ -71,6 +71,11 @@ pub struct VerseRow {
     /// Headings shown just after this verse, such as an epistle's closing
     /// note after its last verse.
     pub headings_after: Vec<HeadingRow>,
+    /// For a word search, the words in this verse that matched, as written
+    /// (stemming means they can differ from what was typed: "covenants"
+    /// for "covenant"), so the page can highlight them. Left out otherwise.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub matches: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -138,10 +143,10 @@ pub struct IndexedVerse {
     pub verse: VerseRow,
 }
 
-const VERSE_COLUMNS: &str = "id, bookId, chapter, nbr, paragraph, sid, children";
+pub(super) const VERSE_COLUMNS: &str = "id, bookId, chapter, nbr, paragraph, sid, children";
 const HEADING_COLUMNS: &str = "id, bookId, chapter, paragraph, afterVerseId, style, children";
 
-fn verse_from_row(row: &Row) -> rusqlite::Result<VerseRow> {
+pub(super) fn verse_from_row(row: &Row) -> rusqlite::Result<VerseRow> {
     Ok(VerseRow {
         id: row.get(0)?,
         book_id: row.get(1)?,
@@ -153,6 +158,7 @@ fn verse_from_row(row: &Row) -> rusqlite::Result<VerseRow> {
         note_start: 0,
         headings_before: Vec::new(),
         headings_after: Vec::new(),
+        matches: Vec::new(),
     })
 }
 
@@ -182,7 +188,7 @@ pub fn count_notes(children: &str) -> u32 {
 /// new chapter, or a gap between reference ranges), the footnotes earlier in
 /// its chapter are counted from the module, so letters never depend on which
 /// part of the chapter happens to be loaded.
-fn assign_note_starts<'a>(
+pub(super) fn assign_note_starts<'a>(
     conn: &Connection,
     verses: impl IntoIterator<Item = &'a mut VerseRow>,
 ) -> Result<()> {
@@ -224,7 +230,7 @@ fn notes_before(conn: &Connection, verse: &VerseRow) -> Result<u32> {
 /// the heading's own chapter (a Psalm title before verse 1), and otherwise
 /// after the verse it follows (an epistle's closing note after its last
 /// verse). Verses may be any selection, such as reference results with gaps.
-fn attach_headings(conn: &Connection, verses: &mut [VerseRow]) -> Result<()> {
+pub(super) fn attach_headings(conn: &Connection, verses: &mut [VerseRow]) -> Result<()> {
     let (Some(first), Some(last)) = (
         verses.iter().map(|verse| verse.id).min(),
         verses.iter().map(|verse| verse.id).max(),

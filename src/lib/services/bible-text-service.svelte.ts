@@ -16,17 +16,34 @@ import {
   type Chapter,
 } from '$lib/services/chapter-text';
 import { adjacentChapter, type BookOutline } from './chapter-steps';
+import { indexHits, type HitIndex } from './search-hits';
 import { recentPlaces } from './recent-places.svelte';
 
 /**
  * How the pane shows text:
  * - 'chapters': whole chapters, in the reader's grouping, scrolled through
  *   endlessly (an empty search, or a place such as "John 3:16").
- * - 'list': the verses of a reference range or list, one by one ("John
- *   3:16-18"), loading more near the end.
- * - 'text': a word search, not built yet.
+ * - 'list': verses one by one, a page at a time, loading more near either
+ *   end: a reference range or list ("John 3:16-18"), a word search, or a
+ *   parallel text showing its main text's verses.
  */
-export type ViewMode = 'chapters' | 'list' | 'text';
+export type ViewMode = 'chapters' | 'list';
+
+/** What a list shows. */
+export type ListSource =
+  /** A reference range or list, in OSIS form. */
+  | { kind: 'ref'; osis: string }
+  /** A word search, as typed. */
+  | { kind: 'text'; search: string }
+  /** These verses: a parallel text showing its main text's list. */
+  | { kind: 'sids'; sids: string[]; key: string };
+
+/** A string that's the same for the same list, to tell lists apart. */
+export function listKey(source: ListSource): string {
+  if (source.kind === 'ref') return `ref:${source.osis}`;
+  if (source.kind === 'text') return `text:${source.search}`;
+  return source.key;
+}
 
 /** A verse for the pane to bring to its top (or, `smooth`, into view). */
 export interface ScrollTarget {
@@ -41,6 +58,8 @@ export type { GroupingMode };
 const startSid = 'GEN 1:1';
 /** Verses loaded at a time in a list. */
 const listPage = 100;
+/** Verses loaded before the one a list opens at, so there's text above. */
+const listBefore = 20;
 const searchDelimiters = [' ', ',', ';'];
 
 /**
@@ -75,11 +94,25 @@ export default class BibleTextService {
   public mode = $state<ViewMode>('chapters');
   /** The loaded chapters, in reading order, next to each other. */
   public chapters = $state<Chapter[]>([]);
-  /** The reference shown as a list, in OSIS form. */
-  public listOsis = $state<string | undefined>();
+  /** What the list shows. */
+  public listSource = $state<ListSource | undefined>();
+  /** Every verse in the list, in its order (Bible order for a search). */
+  public listSids = $state.raw<string[]>([]);
+  /**
+   * The loaded part of the list: positions `listStart` up to (not
+   * including) `listEnd` of `listSids`. A list can start anywhere, so a
+   * jump to its 9,000th verse doesn't load the 8,999 before it.
+   */
+  public listStart = $state(0);
+  public listEnd = $state(0);
   public listVerses = $state<Verse[]>([]);
-  /** How many verses the whole list has. */
-  public listTotal = $state(0);
+  /**
+   * Where the list's verses are, for the picker and the arrows: counted
+   * once per list, not on every look.
+   */
+  public hits = $derived<HitIndex | undefined>(
+    this.mode === 'list' ? indexHits(this.listSids) : undefined
+  );
   /** A chapter or page is loading. */
   public loading = $state(false);
 
@@ -145,6 +178,23 @@ export default class BibleTextService {
     return this.topSid;
   }
 
+  /** How many verses the whole list has. */
+  public get listTotal(): number {
+    return this.listSids.length;
+  }
+
+  /** Tells this list from any other. */
+  public get listKey(): string | undefined {
+    return this.listSource ? listKey(this.listSource) : undefined;
+  }
+
+  /** The words of a word search being shown, as typed. */
+  public get wordSearch(): string | undefined {
+    return this.mode === 'list' && this.listSource?.kind === 'text'
+      ? this.listSource.search
+      : undefined;
+  }
+
   /** The place shown beside the selector, such as 'Gen 1:8'. */
   public get referenceLabel(): string {
     return this.topSid ? this.formatAbbreviatedRefFromSid(this.topSid) : '';
@@ -200,7 +250,8 @@ export default class BibleTextService {
   public async openAt(sid: string): Promise<void> {
     const seq = ++this.loadSeq;
     this.mode = 'chapters';
-    this.listOsis = undefined;
+    this.listSource = undefined;
+    this.listSids = [];
     this.listVerses = [];
     this.loading = true;
     try {
@@ -259,33 +310,24 @@ export default class BibleTextService {
   }
 
   /**
-   * Shows the verses of an OSIS reference one by one, a page at a time,
-   * starting at verse `at` if the list has it (a parallel text opening
-   * beside the main text's list, or a Bible switched), else at the top.
+   * Shows a list one verse at a time: a reference list, a word search, or
+   * another text's verses. It starts at verse `at` if the list has it (a
+   * parallel text opening beside its main text, a Bible switched, a jump
+   * from the picker), else at the top, and loads a page around it.
    */
-  public async showList(osis: string, at?: string): Promise<void> {
+  public async showList(source: ListSource, at?: string): Promise<void> {
     const seq = ++this.loadSeq;
     this.mode = 'list';
-    this.listOsis = osis;
+    this.listSource = source;
+    this.listSids = [];
     this.listVerses = [];
-    this.listTotal = 0;
     this.chapters = [];
     this.loading = true;
     try {
-      const sids = await this.moduleDbService.getSidsByRef(osis);
-      // Load as far as `at`, if it's in the list, and a page beyond.
-      const index = at ? sids.indexOf(at) : -1;
-      const verses = await this.moduleDbService.getRefVerses(
-        osis,
-        0,
-        Math.max(listPage, index + listPage)
-      );
+      const sids = await this.listSidsFor(source);
       if (seq !== this.loadSeq) return;
-      this.listTotal = sids.length;
-      this.listVerses = verses;
-      this.loadError = undefined;
-      const target = index >= 0 ? at : verses[0]?.sid;
-      if (target) this.scrollTarget = { sid: target };
+      this.listSids = sids;
+      await this.openListAt(at ? sids.indexOf(at) : -1, seq);
     } catch (err) {
       if (seq === this.loadSeq) this.loadError = err;
     } finally {
@@ -293,27 +335,75 @@ export default class BibleTextService {
     }
   }
 
-  /** Loads the next page of a list. Returns whether any verses came. */
-  public async loadMoreList(): Promise<boolean> {
-    const osis = this.listOsis;
-    if (
-      this.loading ||
-      this.mode !== 'list' ||
-      !osis ||
-      this.listVerses.length >= this.listTotal
-    ) {
-      return false;
+  /**
+   * Goes to verse `sid` in the list being shown, from the picker or the
+   * arrows: brings it to the top if it's loaded, or loads a page around it.
+   */
+  public async goToListSid(sid: string): Promise<void> {
+    if (this.mode !== 'list') return;
+    this.lead();
+    if (this.listVerses.some((verse) => verse.sid === sid)) {
+      this.scrollTarget = { sid };
+      return;
     }
+    const index = this.listSids.indexOf(sid);
+    if (index < 0) return;
+    const seq = ++this.loadSeq;
+    this.loading = true;
+    try {
+      await this.openListAt(index, seq);
+    } catch (err) {
+      if (seq === this.loadSeq) this.loadError = err;
+    } finally {
+      if (seq === this.loadSeq) this.loading = false;
+    }
+  }
+
+  /**
+   * Loads a page of the list around position `index` (from the top if -1),
+   * with a few verses before it so there's text above, and brings that
+   * verse to the top.
+   */
+  private async openListAt(index: number, seq: number): Promise<void> {
+    const start = index < 0 ? 0 : Math.max(0, index - listBefore);
+    const end = Math.min(this.listSids.length, start + listPage);
+    const verses = await this.listPage(start, end);
+    if (seq !== this.loadSeq) return;
+    this.listStart = start;
+    this.listEnd = end;
+    this.listVerses = verses;
+    this.loadError = undefined;
+    const target = index >= 0 ? this.listSids[index] : verses[0]?.sid;
+    if (target) this.scrollTarget = { sid: target };
+  }
+
+  /**
+   * Loads the page after the loaded verses (`direction` 1) or before them
+   * (-1). Returns whether any came: false at either end of the list, or
+   * while another load is under way.
+   */
+  public async extendList(direction: 1 | -1): Promise<boolean> {
+    if (this.loading || this.mode !== 'list') return false;
+    const [start, end] =
+      direction === 1
+        ? [
+            this.listEnd,
+            Math.min(this.listSids.length, this.listEnd + listPage),
+          ]
+        : [Math.max(0, this.listStart - listPage), this.listStart];
+    if (start >= end) return false;
     const seq = this.loadSeq;
     this.loading = true;
     try {
-      const more = await this.moduleDbService.getRefVerses(
-        osis,
-        this.listVerses.length,
-        listPage
-      );
-      if (seq !== this.loadSeq || more.length === 0) return false;
-      this.listVerses = [...this.listVerses, ...more];
+      const verses = await this.listPage(start, end);
+      if (seq !== this.loadSeq) return false;
+      if (direction === 1) {
+        this.listVerses = [...this.listVerses, ...verses];
+        this.listEnd = end;
+      } else {
+        this.listVerses = [...verses, ...this.listVerses];
+        this.listStart = start;
+      }
       return true;
     } catch (err) {
       this.loadError = err;
@@ -323,14 +413,60 @@ export default class BibleTextService {
     }
   }
 
-  /** A word search: not built yet, so the pane says so. */
-  public showText(): void {
-    ++this.loadSeq;
-    this.mode = 'text';
-    this.chapters = [];
-    this.listOsis = undefined;
-    this.listVerses = [];
-    this.loading = false;
+  /**
+   * Drops `count` loaded verses from the start (`front`) or the end, when
+   * they're far out of view.
+   */
+  public dropList(count: number, front: boolean): void {
+    if (count <= 0 || count >= this.listVerses.length) return;
+    if (front) {
+      const firstKept = this.listVerses[count].sid;
+      this.listVerses = this.listVerses.slice(count);
+      this.listStart = this.positionOf(firstKept, this.listStart);
+    } else {
+      const lastKept = this.listVerses[this.listVerses.length - count - 1].sid;
+      this.listVerses = this.listVerses.slice(
+        0,
+        this.listVerses.length - count
+      );
+      this.listEnd = this.positionOf(lastKept, this.listStart) + 1;
+    }
+  }
+
+  /** Where verse `sid` is in the list, looking from position `from`. */
+  private positionOf(sid: string, from: number): number {
+    const index = this.listSids.indexOf(sid, from);
+    return index < 0 ? this.listSids.indexOf(sid) : index;
+  }
+
+  private async listSidsFor(source: ListSource): Promise<string[]> {
+    if (source.kind === 'ref') {
+      return this.moduleDbService.getSidsByRef(source.osis);
+    }
+    if (source.kind === 'text') {
+      return this.moduleDbService.getTextSids(source.search);
+    }
+    return source.sids;
+  }
+
+  /** The verses at list positions `start` up to `end`. */
+  private async listPage(start: number, end: number): Promise<Verse[]> {
+    const source = this.listSource;
+    if (!source || start >= end) return [];
+    if (source.kind === 'ref') {
+      return this.moduleDbService.getRefVerses(source.osis, start, end - start);
+    }
+    if (source.kind === 'text') {
+      return this.moduleDbService.getTextVerses(
+        source.search,
+        start,
+        end - start
+      );
+    }
+    // Another text's verses: this module may lack some, which are left out.
+    return this.moduleDbService.getVersesForSids(
+      this.listSids.slice(start, end)
+    );
   }
 
   /**
@@ -347,6 +483,11 @@ export default class BibleTextService {
     } else if (this.mode === 'list') {
       if (this.listVerses.some((verse) => verse.sid === sid)) {
         this.scrollTarget = { sid };
+      } else if (this.listSids.includes(sid)) {
+        // Listed but not loaded: load a page around it. goToListSid would
+        // make this text the leader, which following mustn't do.
+        const seq = ++this.loadSeq;
+        await this.openListAt(this.listSids.indexOf(sid), seq);
       }
     }
   }
@@ -392,8 +533,9 @@ export default class BibleTextService {
     }
     if (this.mode === 'chapters') {
       await this.openAt(this.topSid ?? this.browseSid);
-    } else if (this.mode === 'list' && this.listOsis) {
-      await this.showList(this.listOsis, this.topSid);
+    } else if (this.listSource) {
+      // A word search runs again in the new Bible, whose words differ.
+      await this.showList(this.listSource, this.topSid);
     }
   }
 
@@ -465,7 +607,16 @@ export default class BibleTextService {
         searchDelimiters
       );
       this.autoCompletePickInProgress = true;
-      this.searchInput = `${before ?? ''} ${selectedOption.value}`.trim();
+      let value = `${before ?? ''} ${selectedOption.value}`.trim();
+      // A word that would read as a reference ("job", "acts") goes in
+      // quotes: quotes always mean words, never a reference.
+      if (
+        selectedOption.type === 'word' &&
+        parseSearch(value).searchType !== 'text'
+      ) {
+        value = `${before ?? ''} "${selectedOption.value}"`.trim();
+      }
+      this.searchInput = value;
       this.autoCompleteOptions = [];
       await tick();
       this.autoCompletePickInProgress = false;
@@ -485,12 +636,41 @@ export default class BibleTextService {
     );
     if (after.length >= 2) {
       this.addReferenceAutoCompleteOptions(after);
-      // TODO: Add word auto complete options.
       if (this.autoCompleteOptions.length > 0) {
         this.autoCompleteOptions[0].selected = true;
       }
+      this.addWordAutoCompleteOptions(searchInput, after);
     }
     this.searchDebounced();
+  }
+
+  /**
+   * Words in the module beginning with what's being typed, after the books,
+   * each with how many verses have it. They come from Rust, so they're
+   * added only if the search hasn't changed meanwhile.
+   */
+  private async addWordAutoCompleteOptions(
+    searchInput: string,
+    prefix: string
+  ): Promise<void> {
+    const word = prefix.replace(/["\u201C\u201D]/g, '');
+    if (word.length < 2) return;
+    try {
+      const words = await this.moduleDbService.getWordSuggestions(word, 5);
+      if (this.searchInput !== searchInput || words.length === 0) return;
+      const anySelected = this.autoCompleteOptions.length > 0;
+      this.autoCompleteOptions = [
+        ...this.autoCompleteOptions,
+        ...words.map((found, index) => ({
+          value: found.word,
+          type: 'word' as const,
+          count: found.verses,
+          selected: !anySelected && index === 0,
+        })),
+      ];
+    } catch {
+      // Suggestions are only a help: a failure leaves the books shown.
+    }
   }
 
   /**
@@ -506,14 +686,17 @@ export default class BibleTextService {
       return;
     }
     const request = parseSearch(search);
+    let source: ListSource | undefined;
     if (request.searchType === 'point' && request.sid) {
       this.openAt(request.sid);
+      return;
     } else if (request.searchType === 'ref' && request.osis) {
-      if (request.osis !== this.listOsis || this.mode !== 'list') {
-        this.showList(request.osis);
-      }
-    } else {
-      this.showText();
+      source = { kind: 'ref', osis: request.osis };
+    } else if (request.text) {
+      source = { kind: 'text', search: request.text };
+    }
+    if (source && (this.mode !== 'list' || this.listKey !== listKey(source))) {
+      this.showList(source);
     }
   }
 
@@ -529,7 +712,7 @@ export default class BibleTextService {
           ({
             value: b.toc2,
             type: 'ref',
-            count: undefined,
+            count: this.outline.find((o) => o.code === b.code)?.verses.length,
           }) as AutoCompleteOption
       )
     );
