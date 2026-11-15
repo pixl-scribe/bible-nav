@@ -113,7 +113,12 @@
       <div
         class={['flex min-h-0 flex-1', tab.key !== pane.activeKey && 'hidden']}
       >
-        <ParallelText {tab} {pane} main={service} />
+        <ParallelText
+          {tab}
+          {pane}
+          main={service}
+          active={tab.key === pane.activeKey}
+        />
       </div>
     {/if}
   {/each}

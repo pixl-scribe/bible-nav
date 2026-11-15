@@ -24,11 +24,17 @@
     tab,
     pane,
     main,
+    active,
   }: {
     tab: TextTab;
     pane: ParallelPane;
     /** The main pane's text, which this one follows. */
     main: BibleTextService | undefined;
+    /**
+     * Whether this tab is the one shown. Other tabs stay loaded but hidden,
+     * and a hidden pane can't scroll, so only the shown one keeps in step.
+     */
+    active: boolean;
   } = $props();
 
   let service = $state<BibleTextService | undefined>();
@@ -62,7 +68,7 @@
   // the top of the other. The main text leads until this one is scrolled.
   $effect(() => {
     const sid = main?.topSid;
-    if (!sid || !service || !main) return;
+    if (!active || !sid || !service || !main) return;
     untrack(() => {
       if (!service || !main || main.leadAt < service.leadAt) return;
       if (service.topSid !== sid) service.align(sid);
@@ -70,10 +76,22 @@
   });
   $effect(() => {
     const sid = service?.topSid;
-    if (!sid || !service || !main) return;
+    if (!active || !sid || !service || !main) return;
     untrack(() => {
       if (!service || !main || service.leadAt <= main.leadAt) return;
       if (main.topSid !== sid) main.align(sid);
+    });
+  });
+
+  // Shown again (its tab selected): catch up with the main text, which
+  // leads, since this text was last scrolled before it was hidden.
+  $effect(() => {
+    if (!active || !service || !main) return;
+    untrack(() => {
+      if (!service || !main) return;
+      service.leadAt = 0;
+      const sid = main.topSid;
+      if (sid && service.topSid !== sid) service.align(sid);
     });
   });
 

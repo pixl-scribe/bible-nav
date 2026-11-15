@@ -114,6 +114,8 @@
    */
   function measureTop() {
     if (!scrollableElement || !bibleTextService) return;
+    // Hidden, nothing has a place to measure.
+    if (scrollableElement.clientHeight === 0) return;
     const line =
       parseFloat(getComputedStyle(scrollableElement).lineHeight) || 28;
     const top = scrollableElement.getBoundingClientRect().top + line + 4;
@@ -198,6 +200,7 @@
     const pane = scrollableElement;
     const svc = bibleTextService;
     if (maintaining || gliding || !pane || !svc || svc.scrollTarget) return;
+    if (pane.clientHeight === 0) return;
     maintaining = true;
     try {
       if (svc.mode === 'list') {
@@ -360,6 +363,8 @@
       const pane = scrollableElement;
       const svc = bibleTextService;
       if (!pane || !svc || svc.scrollTarget !== target) return;
+      // A hidden pane (a parallel tab not shown) can't scroll: leave it.
+      if (pane.clientHeight === 0) return;
       const isFirst =
         svc.mode === 'chapters' &&
         target.sid === firstVerseOf(chapterOfSid(target.sid));
