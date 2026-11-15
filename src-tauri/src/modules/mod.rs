@@ -7,6 +7,7 @@
 //! - `trust`: which keys sign modules now, from the keys and statements.
 //! - `pins`: pinned editions, whose text the app knows by its text root.
 //! - `text_tree`: computes a module's text and content roots.
+//! - `problem`: problems for the reader, as translatable message keys.
 //! - `queries`: the queries the app runs, with bound parameters.
 //! - `catalog`: the list of modules to download, checked entry by entry.
 //! - `download`: fetching the catalog and installing downloaded modules.
@@ -26,6 +27,7 @@ pub mod folder;
 pub mod integrity;
 pub mod keys;
 pub mod pins;
+pub mod problem;
 pub mod queries;
 pub mod statements;
 pub mod store;

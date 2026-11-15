@@ -25,6 +25,7 @@ pub fn run() {
             modules::commands::chapter_notes,
             modules::folder::modules_folder_status,
             modules::folder::dismiss_modules_folder_notice,
+            modules::folder::pick_modules_folder,
             modules::folder::change_modules_folder,
             modules::folder::rescan_modules,
             modules::downloads::check_for_modules,

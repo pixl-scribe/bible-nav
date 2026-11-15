@@ -18,6 +18,7 @@ use tauri_plugin_store::StoreExt;
 
 use super::commands::ModuleRegistry;
 use super::error::{ModuleError, Result};
+use super::problem::Problem;
 use super::store::{self, FolderChoice, InstallOutcome};
 use super::trust;
 
@@ -72,8 +73,8 @@ pub struct FolderStatus {
     pub show_notice: bool,
     pub modules: Vec<ModuleSummary>,
     /// Problems a person should know about, such as files that aren't valid
-    /// modules, in plain words.
-    pub problems: Vec<String>,
+    /// modules, as translatable messages.
+    pub problems: Vec<Problem>,
     /// When the module list was last checked, in seconds since 1970, if
     /// ever. Portable copies don't record it.
     pub catalog_checked_at: Option<u64>,
@@ -83,9 +84,27 @@ pub struct FolderStatus {
 #[derive(Default)]
 pub struct FolderState {
     current: Mutex<(Option<FolderChoice>, FolderStatus)>,
+    /// A folder picked but not yet switched to.
+    picked: Mutex<Option<PathBuf>>,
 }
 
 impl FolderState {
+    fn set_picked(&self, folder: Option<PathBuf>) -> Result<()> {
+        *self
+            .picked
+            .lock()
+            .map_err(|_| ModuleError::Task("the folder state is unusable".into()))? = folder;
+        Ok(())
+    }
+
+    fn take_picked(&self) -> Result<Option<PathBuf>> {
+        Ok(self
+            .picked
+            .lock()
+            .map_err(|_| ModuleError::Task("the folder state is unusable".into()))?
+            .take())
+    }
+
     pub(crate) fn get(&self) -> Result<(Option<FolderChoice>, FolderStatus)> {
         self.current.lock().map(|guard| guard.clone()).map_err(|_| {
             ModuleError::Task("the folder state is unusable after an earlier failure".into())
@@ -125,9 +144,7 @@ pub fn initialize<R: Runtime>(app: &AppHandle<R>) {
             load_folder(app, choice, Install::Bundled)
         }
         None => FolderStatus {
-            problems: vec![
-                "Bible Nav couldn't find a Documents or home folder for its modules.".into(),
-            ],
+            problems: vec![Problem::new("problem.noFolder")],
             ..FolderStatus::default()
         },
     };
@@ -185,33 +202,36 @@ pub(crate) fn load_folder<R: Runtime>(
                 for (bundled, result) in results {
                     match result {
                         Ok(InstallOutcome::ReplacedInvalid { set_aside, .. }) => {
-                            status.problems.push(format!(
-                                "A damaged module was set aside as {}, and a fresh copy installed.",
-                                set_aside.display()
-                            ))
+                            status.problems.push(
+                                Problem::new("problem.damagedReplaced")
+                                    .with("file", file_name(&set_aside)),
+                            )
                         }
                         Ok(_) => {}
-                        Err(error) => status.problems.push(format!(
-                            "The built-in module {} couldn't be installed: {error}",
-                            bundled.display()
-                        )),
+                        Err(error) => status.problems.push(
+                            Problem::new("problem.builtInNotInstalled")
+                                .with("file", file_name(&bundled))
+                                .detail(error),
+                        ),
                     }
                 }
             }
             Err(error) => status
                 .problems
-                .push(format!("The built-in modules couldn't be found: {error}")),
+                .push(Problem::new("problem.builtInNotFound").detail(error)),
         }
         if let Err(error) = store::write_readme(&choice.path) {
             status
                 .problems
-                .push(format!("The folder's README couldn't be written: {error}"));
+                .push(Problem::new("problem.readmeNotWritten").detail(error));
         }
     }
 
     let registry = app.state::<ModuleRegistry>();
     if let Err(error) = registry.clear() {
-        status.problems.push(error.to_string());
+        status
+            .problems
+            .push(Problem::new("problem.internal").detail(error));
     }
     let built_in = bundled_file_names(app);
     match store::scan_all(&choice.path) {
@@ -241,22 +261,24 @@ pub(crate) fn load_folder<R: Runtime>(
                         license: module.license,
                         text_verified: module.text_verified,
                     }),
-                    Err(error) => status
-                        .problems
-                        .push(format!("{}: {error}", module.path.display())),
+                    Err(error) => status.problems.push(
+                        Problem::new("problem.notOpened")
+                            .with("file", file_name(&module.path))
+                            .detail(error),
+                    ),
                 }
             }
             for skip in skipped {
-                status.problems.push(format!(
-                    "{} isn't a usable module ({})",
-                    skip.path.display(),
-                    skip.reason
-                ));
+                status.problems.push(
+                    Problem::new("problem.notAModule")
+                        .with("file", file_name(&skip.path))
+                        .detail(skip.reason),
+                );
             }
         }
         Err(error) => status
             .problems
-            .push(format!("The modules folder couldn't be read: {error}")),
+            .push(Problem::new("problem.folderUnreadable").detail(error)),
     }
     status
 }
@@ -348,13 +370,16 @@ pub async fn rescan_modules<R: Runtime>(
     Ok(status)
 }
 
-/// Lets the person pick a new folder with the system folder picker, moves
-/// the modules there, and reopens them. Returns `None` if they cancel.
+/// Lets the person pick a new modules folder with the system folder
+/// picker, whose `title` the page gives (translated). The folder is kept
+/// here, never sent by the page, until `change_modules_folder` uses it.
+/// Returns the folder for display, or `None` if they cancel.
 #[tauri::command]
-pub async fn change_modules_folder<R: Runtime>(
+pub async fn pick_modules_folder<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, FolderState>,
-) -> Result<Option<FolderStatus>> {
+    title: String,
+) -> Result<Option<String>> {
     let (current, _) = state.get()?;
     if current.as_ref().is_some_and(|choice| choice.portable) {
         return Err(ModuleError::Unsupported(
@@ -367,10 +392,7 @@ pub async fn change_modules_folder<R: Runtime>(
     let picker_app = app.clone();
     let start = current.as_ref().map(|choice| choice.path.clone());
     let picked = tauri::async_runtime::spawn_blocking(move || {
-        let mut dialog = picker_app
-            .dialog()
-            .file()
-            .set_title("Choose a folder for Bible modules");
+        let mut dialog = picker_app.dialog().file().set_title(title);
         if let Some(start) = start {
             dialog = dialog.set_directory(start);
         }
@@ -380,18 +402,39 @@ pub async fn change_modules_folder<R: Runtime>(
     .map_err(|error| ModuleError::Task(error.to_string()))?;
 
     let Some(picked) = picked else {
+        state.set_picked(None)?;
         return Ok(None);
     };
-    let new_folder = picked
+    let folder = picked
         .into_path()
         .map_err(|error| ModuleError::Unsupported(format!("that folder can't be used: {error}")))?;
+    let display = folder.to_string_lossy().into_owned();
+    state.set_picked(Some(folder))?;
+    Ok(Some(display))
+}
+
+/// Switches to the folder last picked with `pick_modules_folder`. With
+/// `move_modules`, the current modules move there first, each checked in
+/// its new place before the original is removed; otherwise they stay where
+/// they are. Either way the built-in modules and saved key statements are
+/// written to the new folder, and its modules are opened.
+#[tauri::command]
+pub async fn change_modules_folder<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, FolderState>,
+    move_modules: bool,
+) -> Result<FolderStatus> {
+    let (current, _) = state.get()?;
+    let new_folder = state
+        .take_picked()?
+        .ok_or_else(|| ModuleError::Unsupported("no new folder was picked".into()))?;
 
     let worker_app = app.clone();
     let old_folder = current.map(|choice| choice.path);
     let (choice, status) = tauri::async_runtime::spawn_blocking(move || -> Result<_> {
-        let report = match &old_folder {
-            Some(old) => store::move_modules(old, &new_folder)?,
-            None => store::MoveReport::default(),
+        let report = match (&old_folder, move_modules) {
+            (Some(old), true) => store::move_modules(old, &new_folder)?,
+            _ => store::MoveReport::default(),
         };
         write_setting(&worker_app, FOLDER_KEY, json!(new_folder.to_string_lossy()));
         // Choosing a folder counts as having seen the notice.
@@ -402,10 +445,9 @@ pub async fn change_modules_folder<R: Runtime>(
         };
         let mut status = load_folder(&worker_app, &choice, Install::Bundled);
         if !report.left_behind.is_empty() {
-            status.problems.push(format!(
-                "These modules stayed in the old folder because the new folder already had files with the same names: {}",
-                report.left_behind.join(", ")
-            ));
+            status.problems.push(
+                Problem::new("problem.leftBehind").with("files", report.left_behind.join(", ")),
+            );
         }
         Ok((choice, status))
     })
@@ -413,5 +455,5 @@ pub async fn change_modules_folder<R: Runtime>(
     .map_err(|error| ModuleError::Task(error.to_string()))??;
 
     state.set(Some(choice), status.clone())?;
-    Ok(Some(status))
+    Ok(status)
 }

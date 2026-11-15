@@ -7,6 +7,7 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { _ } from 'svelte-i18n';
   import { moduleFolderService } from '$lib/services/module-folder-service.svelte';
+  import ModuleMessage from './module-message.svelte';
 
   let problemsDismissed = $state(false);
 
@@ -15,6 +16,17 @@
     !problemsDismissed &&
       ((status?.problems.length ?? 0) > 0 || !!moduleFolderService.error)
   );
+
+  /**
+   * On first run there's nothing to keep in the old folder, so the built-in
+   * modules simply move to the folder picked.
+   */
+  async function changeFolder() {
+    const picked = await moduleFolderService.pickFolder(
+      $_('modules.change.picker-title')
+    );
+    if (picked) await moduleFolderService.changeFolder(true);
+  }
 
   onMount(() => {
     moduleFolderService.load();
@@ -46,7 +58,7 @@
           <button
             class="btn btn-sm"
             disabled={moduleFolderService.changing}
-            onclick={() => moduleFolderService.changeFolder()}
+            onclick={changeFolder}
           >
             {$_('modules-folder.change')}
           </button>
@@ -68,10 +80,10 @@
         <span class="font-bold">{$_('modules-folder.problems')}</span>
         <ul class="list-disc pl-4 text-sm whitespace-normal">
           {#if moduleFolderService.error}
-            <li>{moduleFolderService.error}</li>
+            <li><ModuleMessage error={moduleFolderService.error} /></li>
           {/if}
           {#each status?.problems ?? [] as problem, index (index)}
-            <li>{problem}</li>
+            <li><ModuleMessage {problem} /></li>
           {/each}
         </ul>
         <button

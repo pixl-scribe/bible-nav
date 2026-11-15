@@ -1,11 +1,28 @@
 import { invoke } from '@tauri-apps/api/core';
+import type { Problem } from './module-messages';
 
-/** A module found in the modules folder. */
+/** An older version of a module, kept beside the newest. */
+export interface OlderVersion {
+  version: string;
+  file: string;
+}
+
+/** A module in the modules folder. Matches `ModuleSummary` in src-tauri/src/modules/folder.rs. */
 export interface ModuleSummary {
   id: string;
   name: string;
   version: string;
   file: string;
+  /** From the module itself, which its signed file hash covers. */
+  description: string;
+  language: string;
+  license: string;
+  /** The app carries this module. */
+  builtIn: boolean;
+  /** Its text is exactly a pinned edition the app knows. */
+  textVerified: boolean;
+  /** Older versions in the folder, newest first. */
+  older: OlderVersion[];
 }
 
 /** Where modules are kept. Matches `FolderStatus` in src-tauri/src/modules/folder.rs. */
@@ -17,7 +34,9 @@ export interface FolderStatus {
   showNotice: boolean;
   modules: ModuleSummary[];
   /** Problems to show the reader, such as files that aren't valid modules. */
-  problems: string[];
+  problems: Problem[];
+  /** When the module list was last checked, in seconds since 1970. */
+  catalogCheckedAt: number | null;
 }
 
 /**
@@ -27,7 +46,8 @@ export interface FolderStatus {
  */
 class ModuleFolderService {
   public status = $state<FolderStatus | undefined>(undefined);
-  public error = $state<string | undefined>(undefined);
+  /** The last command's error, for `errorMessage` to describe. */
+  public error = $state<unknown>(undefined);
   public changing = $state(false);
   private rescanning = false;
 
@@ -53,30 +73,66 @@ class ModuleFolderService {
     }
   }
 
-  /** Opens the system folder picker, then moves the modules there. */
-  public async changeFolder(): Promise<void> {
+  /**
+   * Opens the system folder picker, titled `title`. Returns the picked
+   * folder for display, or undefined if the reader cancelled. Rust keeps
+   * the folder until `changeFolder`.
+   */
+  public async pickFolder(title: string): Promise<string | undefined> {
+    try {
+      this.error = undefined;
+      return (
+        (await invoke<string | null>('pick_modules_folder', { title })) ??
+        undefined
+      );
+    } catch (err) {
+      this.error = err;
+      return undefined;
+    }
+  }
+
+  /**
+   * Switches to the picked folder, moving the current modules there if
+   * `moveModules`, or leaving them where they are.
+   */
+  public async changeFolder(moveModules: boolean): Promise<void> {
     this.changing = true;
     try {
-      // Rust returns null if the reader cancels the picker.
       await this.run(() =>
-        invoke<FolderStatus | null>('change_modules_folder')
+        invoke<FolderStatus>('change_modules_folder', { moveModules })
       );
     } finally {
       this.changing = false;
     }
   }
 
-  private async run(
-    command: () => Promise<FolderStatus | null>
-  ): Promise<void> {
+  /** Opens the modules folder in the system's file manager. */
+  public async openFolder(): Promise<void> {
     try {
-      const status = await command();
-      if (status) {
-        this.status = status;
-      }
+      await invoke('open_modules_folder');
+    } catch (err) {
+      this.error = err;
+    }
+  }
+
+  /** Deletes an older version of a module, given its file name. */
+  public async deleteVersion(file: string): Promise<void> {
+    await this.run(() =>
+      invoke<FolderStatus>('delete_module_version', { file })
+    );
+  }
+
+  /** Takes a status from another command, such as a download. */
+  public update(status: FolderStatus): void {
+    this.status = status;
+  }
+
+  private async run(command: () => Promise<FolderStatus>): Promise<void> {
+    try {
+      this.status = await command();
       this.error = undefined;
     } catch (err) {
-      this.error = String(err);
+      this.error = err;
     }
   }
 }

@@ -16,6 +16,7 @@ use ed25519_dalek::VerifyingKey;
 
 use super::integrity::key_id;
 use super::keys;
+use super::problem::Problem;
 use super::statements::{self, Statement};
 
 #[derive(Debug, Clone, Default)]
@@ -101,7 +102,7 @@ pub fn current() -> Trust {
 /// app never forgets it and anyone who copies the modules folder gets it.
 /// Portable copies pass `write: false`: they leave no trace on the computer
 /// and may run from read-only media.
-pub fn load(saved: Option<&Path>, modules_keys: &Path, write: bool) -> (Trust, Vec<String>) {
+pub fn load(saved: Option<&Path>, modules_keys: &Path, write: bool) -> (Trust, Vec<Problem>) {
     load_with(
         saved,
         modules_keys,
@@ -117,7 +118,7 @@ fn load_with(
     write: bool,
     backup_keys: &[VerifyingKey],
     built_in: &[VerifyingKey],
-) -> (Trust, Vec<String>) {
+) -> (Trust, Vec<Problem>) {
     let mut found = built_in_statements();
     if let Some(saved) = saved {
         found.extend(statements::read_folder(saved));
@@ -129,11 +130,12 @@ fn load_with(
         for (statement, found) in &checked.accepted {
             for folder in saved.into_iter().chain([modules_keys]) {
                 if let Err(error) = statements::save(folder, statement, found) {
-                    problems.push(format!(
-                        "The key statement {} couldn't be saved in {}: {error}",
-                        found.origin,
-                        folder.display()
-                    ));
+                    problems.push(
+                        Problem::new("problem.statementNotSaved")
+                            .with("origin", found.origin.clone())
+                            .with("folder", folder.display().to_string())
+                            .detail(error),
+                    );
                 }
             }
         }
@@ -246,7 +248,7 @@ mod tests {
         assert!(check(&kept).is_ok());
     }
 
-    fn load_test(saved: &Path, modules_keys: &Path, write: bool) -> (Trust, Vec<String>) {
+    fn load_test(saved: &Path, modules_keys: &Path, write: bool) -> (Trust, Vec<Problem>) {
         load_with(
             Some(saved),
             modules_keys,
@@ -283,7 +285,8 @@ mod tests {
 
         let (trust, problems) = load_test(saved.path(), &keys_folder, true);
         assert_eq!(problems.len(), 1, "{problems:?}");
-        assert!(problems[0].contains("bible-nav-keys-2.json was ignored"));
+        assert_eq!(problems[0].key, "problem.statementIgnored");
+        assert!(problems[0].values["origin"].ends_with("bible-nav-keys-2.json"));
         let trusted: Vec<String> = trust.trusted.iter().map(key_id).collect();
         assert!(trusted.contains(&"6a3803d5f059902a".to_string()));
         assert_eq!(statements::read_folder(saved.path()).len(), 1);

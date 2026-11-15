@@ -19,6 +19,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 use super::integrity::{key_id, signer};
+use super::problem::Problem;
 
 /// The first field of every statement, so its signed bytes say what they are.
 pub const STATEMENT_TYPE: &str = "bible-nav key statement";
@@ -197,7 +198,7 @@ pub struct Checked {
     pub accepted: Vec<(Statement, Found)>,
     /// Statements ignored, with the reason, for the reader to see: one that
     /// fails to check may be a forgery.
-    pub problems: Vec<String>,
+    pub problems: Vec<Problem>,
 }
 
 /// Checks every found statement, keeping one copy of each.
@@ -214,10 +215,11 @@ pub fn check_all(found: Vec<Found>, backup_keys: &[VerifyingKey]) -> Checked {
                 seen.insert(hash);
                 checked.accepted.push((accepted, statement));
             }
-            Err(reason) => checked.problems.push(format!(
-                "The key statement {} was ignored: {reason}.",
-                statement.origin
-            )),
+            Err(reason) => checked.problems.push(
+                Problem::new("problem.statementIgnored")
+                    .with("origin", statement.origin.clone())
+                    .detail(reason),
+            ),
         }
     }
     checked
@@ -368,7 +370,8 @@ mod tests {
         assert_eq!(checked.accepted.len(), 1);
         assert_eq!(checked.problems.len(), 1);
         assert!(
-            checked.problems[0].contains("tampered was ignored"),
+            checked.problems[0].key == "problem.statementIgnored"
+                && checked.problems[0].values["origin"] == "tampered",
             "{:?}",
             checked.problems
         );

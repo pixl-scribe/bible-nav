@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ModuleMessage from './module-message.svelte';
   import { onMount, untrack } from 'svelte';
   import { _ } from 'svelte-i18n';
   import BibleTextService from '$lib/services/bible-text-service.svelte.js';
@@ -155,7 +156,7 @@
   <SearchRow {bibleTextService} {parallelOpen} {onToggleParallel} />
   {#if bibleTextService?.loadError}
     <div role="alert" class="alert alert-error m-2 whitespace-normal">
-      {bibleTextService.loadError}
+      <ModuleMessage error={bibleTextService.loadError} />
     </div>
   {/if}
   <div class="flex min-h-0 w-full flex-1 pt-2 pl-2 pb-2">

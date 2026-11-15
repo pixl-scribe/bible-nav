@@ -3,9 +3,11 @@
   import { _ } from 'svelte-i18n';
   import Settings from './settings.svelte';
   import AboutDialog from './about-dialog.svelte';
+  import ModulesDialog from './modules-dialog.svelte';
 
   let isSettingsOpen = $state(false);
   let aboutDialogRef = $state<HTMLDialogElement>();
+  let modulesDialogRef = $state<HTMLDialogElement>();
 
   function openSettingsDrawer() {
     isSettingsOpen = true;
@@ -18,10 +20,11 @@
 
 <ul class="menu bg-base-100 rounded-box rounded-xl space-y-1 self-start">
   <li>
-    <!-- svelte-ignore a11y_missing_attribute -->
+    <!-- svelte-ignore a11y_missing_attribute, a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <a
       class="btn btn-soft btn-primary tooltip tooltip-right"
       data-tip={$_('left-nav.modules')}
+      onclick={() => modulesDialogRef?.showModal()}
     >
       <LibraryBig />
     </a>
@@ -66,3 +69,4 @@
 </div>
 
 <AboutDialog bind:dialog={aboutDialogRef} />
+<ModulesDialog bind:dialog={modulesDialogRef} />

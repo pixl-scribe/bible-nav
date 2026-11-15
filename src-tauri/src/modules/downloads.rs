@@ -24,6 +24,7 @@ use super::folder::{
     CATALOG_CHECKED_KEY,
 };
 use super::integrity::sidecars;
+use super::problem::Problem;
 use super::store::{compare_versions, FolderChoice};
 use super::{keys, statements, trust};
 
@@ -69,7 +70,7 @@ pub struct OfferSummary {
 pub struct CatalogStatus {
     pub offers: Vec<OfferSummary>,
     /// Entries or key statements that were skipped, and why.
-    pub problems: Vec<String>,
+    pub problems: Vec<Problem>,
     pub checked_at: u64,
     /// The modules folder, reloaded in case a key statement changed what's
     /// trusted.
@@ -139,7 +140,7 @@ pub async fn check_for_modules<R: Runtime>(
 fn check_catalog<R: Runtime>(
     app: &AppHandle<R>,
     choice: &FolderChoice,
-) -> Result<(Vec<Offer>, Vec<String>, FolderStatus)> {
+) -> Result<(Vec<Offer>, Vec<Problem>, FolderStatus)> {
     let (url, bytes) = download::fetch_catalog(&Web::new(), catalog::CATALOG_URLS)?;
     let parsed = catalog::parse(&bytes, &url)?;
 
@@ -159,21 +160,19 @@ fn check_catalog<R: Runtime>(
             .chain([keys_folder.as_path()])
         {
             if let Err(error) = statements::save(folder, statement, found) {
-                problems.push(format!(
-                    "A key statement from the module list couldn't be saved in {}: {error}",
-                    folder.display()
-                ));
+                problems.push(
+                    Problem::new("problem.statementNotSaved")
+                        .with("origin", found.origin.clone())
+                        .with("folder", folder.display().to_string())
+                        .detail(error),
+                );
             }
         }
     }
     // Reloading the folder applies them to the installed modules too.
     let folder = load_folder(app, choice, Install::Nothing);
     let (offers, skipped) = catalog::check_entries(parsed.entries, &trust::current());
-    problems.extend(
-        skipped
-            .into_iter()
-            .map(|reason| format!("The module list's {reason}.")),
-    );
+    problems.extend(skipped);
     Ok((offers, problems, folder))
 }
 

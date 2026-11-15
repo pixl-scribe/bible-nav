@@ -4,6 +4,7 @@
    * note that was clicked is scrolled to the top and highlighted. Each note's
    * heading takes the main pane to its verse.
    */
+  import ModuleMessage from './module-message.svelte';
   import { tick, untrack } from 'svelte';
   import { _ } from 'svelte-i18n';
   import type { ChapterNote } from '$lib/model/verse';
@@ -26,7 +27,7 @@
 
   let notes = $state<ChapterNote[]>([]);
   let loadedChapter = $state<string | undefined>();
-  let error = $state<string | undefined>();
+  let error = $state<unknown>();
   let list = $state<HTMLElement>();
 
   const chapter = $derived(chapterOf(tab.sid));
@@ -49,7 +50,7 @@
           notes = found;
           loadedChapter = wanted;
         })
-        .catch((err) => (error = String(err)));
+        .catch((err) => (error = err));
     });
   });
 
@@ -88,7 +89,7 @@
   <div class="mx-auto flex flex-col gap-1.5" style:max-width={textMaxWidth}>
     {#if error}
       <div role="alert" class="alert alert-error whitespace-normal">
-        {error}
+        <ModuleMessage {error} />
       </div>
     {:else if loadedChapter !== chapter}
       <p class="p-2 text-sm text-base-content/60">{$_('notes.loading')}</p>

@@ -62,8 +62,42 @@ impl From<std::io::Error> for ModuleError {
     }
 }
 
+impl ModuleError {
+    /// The kind of error, which the page turns into a translated message
+    /// (`error.<code>` in its locale files).
+    pub fn code(&self) -> &'static str {
+        match self {
+            ModuleError::Sqlite(_) => "database",
+            ModuleError::Io(_) => "file",
+            ModuleError::Unsupported(_) => "unsupported",
+            ModuleError::Untrusted(_) => "untrusted",
+            ModuleError::NotFound(_) => "notFound",
+            ModuleError::UnknownModule(_) => "unknownModule",
+            ModuleError::Task(_) => "task",
+            ModuleError::Network(_) => "network",
+            ModuleError::Cancelled => "cancelled",
+        }
+    }
+
+    /// The technical reason, in English, for diagnosing the problem.
+    pub fn detail(&self) -> String {
+        match self {
+            ModuleError::Sqlite(error) => error.to_string(),
+            ModuleError::Io(error) => error.to_string(),
+            ModuleError::Unsupported(reason)
+            | ModuleError::Untrusted(reason)
+            | ModuleError::NotFound(reason)
+            | ModuleError::UnknownModule(reason)
+            | ModuleError::Task(reason)
+            | ModuleError::Network(reason) => reason.clone(),
+            ModuleError::Cancelled => String::new(),
+        }
+    }
+}
+
 /// Tauri sends command errors to the web page as JSON, so they must be
-/// serializable. The page receives the error's message as a string.
+/// serializable. The page receives `{ code, detail }`: it shows a
+/// translated message for `code`, and `detail` (English) beneath it.
 impl serde::Serialize for ModuleError {
     // The standard `Result` is spelled out here, because the `Result` alias
     // below has a fixed error type and serde needs its own.
@@ -71,9 +105,27 @@ impl serde::Serialize for ModuleError {
         &self,
         serializer: S,
     ) -> std::result::Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
+        use serde::ser::SerializeStruct;
+        let mut error = serializer.serialize_struct("ModuleError", 2)?;
+        error.serialize_field("code", self.code())?;
+        error.serialize_field("detail", &self.detail())?;
+        error.end()
     }
 }
 
 /// Shorthand used throughout the modules code.
 pub type Result<T> = std::result::Result<T, ModuleError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn errors_reach_the_page_as_a_code_and_a_detail() {
+        let error = ModuleError::Network("timed out".into());
+        assert_eq!(
+            serde_json::to_value(&error).unwrap(),
+            serde_json::json!({ "code": "network", "detail": "timed out" })
+        );
+    }
+}

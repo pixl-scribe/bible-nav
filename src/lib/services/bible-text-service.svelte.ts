@@ -72,12 +72,13 @@ export default class BibleTextService {
   public referenceLabel = $state<string>('');
   public autoCompletePickInProgress = $state<boolean>(false);
   /** A problem loading text, such as a missing module, to show the reader. */
-  public loadError = $state<string | undefined>(undefined);
+  /** The last load's error, for `errorMessage` to describe. */
+  public loadError = $state<unknown>(undefined);
 
   constructor(public readonly moduleId: string) {
     this.moduleDbService = new ModuleDbService(moduleId);
-    this.getModule().catch((err) => (this.loadError = String(err)));
-    this.getBooks().catch((err) => (this.loadError = String(err)));
+    this.getModule().catch((err) => (this.loadError = err));
+    this.getBooks().catch((err) => (this.loadError = err));
     this.getText(this.currentSearch, this.currentSearchType).then();
 
     // Watch search and search type.
@@ -535,7 +536,7 @@ export default class BibleTextService {
       }
       this.loadError = undefined;
     } catch (err) {
-      this.loadError = String(err);
+      this.loadError = err;
       this.selectInProgress = false;
     }
   }
