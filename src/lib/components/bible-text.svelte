@@ -7,6 +7,7 @@
   import Verse from './verse.svelte';
   import SearchRow from './search-row.svelte';
   import FootnoteTooltip from './footnote-tooltip.svelte';
+  import type { MenuSection } from './module-menu.svelte';
   import {
     appSettingsService,
     textMaxWidths,
@@ -41,6 +42,7 @@
     service = $bindable(),
     parallelOpen = false,
     onToggleParallel,
+    parallelMenu,
     showSearch = true,
     startSid,
     selectorLabel,
@@ -50,6 +52,8 @@
     service?: BibleTextService;
     parallelOpen?: boolean;
     onToggleParallel?: () => void;
+    /** What the Parallel button offers while the parallel pane is empty. */
+    parallelMenu?: MenuSection[];
     /** A parallel text shows no search box, only the Bible selector. */
     showSearch?: boolean;
     /** Where to start, such as the main text's verse for a parallel text. */
@@ -401,6 +405,7 @@
     {bibleTextService}
     {parallelOpen}
     {onToggleParallel}
+    {parallelMenu}
     {showSearch}
     {selectorLabel}
     onSelectModule={onModuleChange}

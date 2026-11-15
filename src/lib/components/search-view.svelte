@@ -12,6 +12,8 @@
     FOOTNOTE_OPEN_EVENT,
     type FootnoteOpenRequest,
   } from '$lib/services/footnote-events';
+  import { parallelMenuSections } from '$lib/services/parallel-menu';
+  import { moduleFolderService } from '$lib/services/module-folder-service.svelte';
   import BibleText from './bible-text.svelte';
   import ParallelPane from './parallel-pane.svelte';
 
@@ -36,6 +38,19 @@
 
   let service = $state<BibleTextService | undefined>();
   let element = $state<HTMLElement>();
+
+  // While the parallel pane has no tabs, the Parallel button offers what
+  // can open in it, instead of opening an empty pane.
+  const parallelMenu = $derived(
+    tab.parallel.tabs.length === 0
+      ? parallelMenuSections(
+          tab.parallel,
+          service,
+          moduleFolderService.status?.modules ?? [],
+          $_
+        )
+      : undefined
+  );
 
   // The search tab shows what was typed.
   $effect(() => {
@@ -87,6 +102,7 @@
     {onModuleChange}
     parallelOpen={tab.parallel.open}
     onToggleParallel={() => tab.parallel.toggle()}
+    {parallelMenu}
   />
   {#if tab.parallel.open}
     <ParallelPane pane={tab.parallel} {service} />

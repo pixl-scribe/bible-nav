@@ -4,11 +4,13 @@
   import BibleTextService from '$lib/services/bible-text-service.svelte.js';
   import type { AutoCompleteOption } from '$lib/model/auto-complete-option';
   import ModuleSelector from './module-selector.svelte';
+  import ModuleMenu, { type MenuSection } from './module-menu.svelte';
 
   let {
     bibleTextService,
     parallelOpen = false,
     onToggleParallel,
+    parallelMenu,
     showSearch = true,
     selectorLabel,
     onSelectModule,
@@ -16,6 +18,12 @@
     bibleTextService: BibleTextService | undefined;
     parallelOpen?: boolean;
     onToggleParallel?: () => void;
+    /**
+     * While the parallel pane has no tabs, the Parallel button drops this
+     * menu down (Bibles, then notes) instead of opening an empty pane; the
+     * pick opens the pane. Otherwise the button shows or hides the pane.
+     */
+    parallelMenu?: MenuSection[];
     /** A parallel text has no search of its own: just the selector. */
     showSearch?: boolean;
     /** What the selector chooses for, such as "Bible for this search". */
@@ -24,6 +32,19 @@
   } = $props();
 
   let inputRef = $state<HTMLInputElement | undefined>(undefined);
+  let parallelMenuOpen = $state(false);
+  const offersMenu = $derived(!parallelOpen && !!parallelMenu);
+
+  function onParallelClick(event: MouseEvent) {
+    if (offersMenu) {
+      // Kept from reaching the window, where it would close the menu.
+      event.stopPropagation();
+      parallelMenuOpen = !parallelMenuOpen;
+    } else {
+      parallelMenuOpen = false;
+      onToggleParallel?.();
+    }
+  }
 
   let searchInput = $state({
     get value() {
@@ -76,12 +97,22 @@
       <button
         type="button"
         class={['btn btn-soft btn-primary ml-2', parallelOpen && 'btn-active']}
-        aria-pressed={parallelOpen}
-        onclick={onToggleParallel}
+        aria-pressed={offersMenu ? undefined : parallelOpen}
+        aria-haspopup={offersMenu ? 'menu' : undefined}
+        aria-expanded={offersMenu ? parallelMenuOpen : undefined}
+        onclick={onParallelClick}
       >
         <Columns2 size={18} />
         {$_('bible-text.parallel')}
       </button>
+      {#if parallelMenuOpen && parallelMenu}
+        <ModuleMenu
+          sections={parallelMenu}
+          label={$_('parallel.add')}
+          class="top-13 right-2"
+          onclose={() => (parallelMenuOpen = false)}
+        />
+      {/if}
     {/if}
     {#if bibleTextService && bibleTextService.autoCompleteOptions.length > 0}
       <ul

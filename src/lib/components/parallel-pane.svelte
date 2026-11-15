@@ -8,12 +8,11 @@
   import { Plus, X } from '@lucide/svelte';
   import { _ } from 'svelte-i18n';
   import type BibleTextService from '$lib/services/bible-text-service.svelte';
-  import {
-    notesTabKey,
-    textTabKey,
-    type ParallelPane,
-    type ParallelTab,
+  import type {
+    ParallelPane,
+    ParallelTab,
   } from '$lib/services/parallel-pane.svelte';
+  import { parallelMenuSections } from '$lib/services/parallel-menu';
   import {
     appSettingsService,
     textMaxWidths,
@@ -21,7 +20,7 @@
   import { moduleFolderService } from '$lib/services/module-folder-service.svelte';
   import NotesPanel from './notes-panel.svelte';
   import ParallelText from './parallel-text.svelte';
-  import ModuleMenu, { type MenuSection } from './module-menu.svelte';
+  import ModuleMenu from './module-menu.svelte';
 
   let {
     pane,
@@ -47,46 +46,8 @@
     return tab.kind === 'notes' ? $_('notes.tab', { values: { abbr } }) : abbr;
   }
 
-  const isOpen = (key: string) => pane.tabs.some((tab) => tab.key === key);
-  const openDetail = (key: string) =>
-    isOpen(key) ? $_('module-menu.open') : undefined;
-
-  /**
-   * The + menu: every Bible as a parallel text, then every module with
-   * notes. One already open says so, and picking it selects its tab.
-   */
-  const sections = $derived<MenuSection[]>([
-    {
-      heading: $_('module-menu.parallel-text'),
-      items: modules
-        .filter((module) => module.moduleType === 'bible')
-        .map((module) => ({
-          key: textTabKey(module.id),
-          abbreviation: module.abbreviation,
-          name: module.name,
-          detail: openDetail(textTabKey(module.id)),
-          pick: () => {
-            const sid = service?.sidInView;
-            if (sid) pane.openText(module.id, sid);
-          },
-        })),
-    },
-    {
-      heading: $_('module-menu.notes'),
-      items: modules
-        .filter((module) => module.hasNotes)
-        .map((module) => ({
-          key: notesTabKey(module.id),
-          abbreviation: module.abbreviation,
-          name: $_('notes.tab', { values: { abbr: module.abbreviation } }),
-          detail: openDetail(notesTabKey(module.id)),
-          pick: () => {
-            const sid = service?.sidInView;
-            if (sid) pane.openNotes(module.id, sid);
-          },
-        })),
-    },
-  ]);
+  /** The + menu: Bibles as parallel texts, then modules with notes. */
+  const sections = $derived(parallelMenuSections(pane, service, modules, $_));
 </script>
 
 <section
