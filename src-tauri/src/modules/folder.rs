@@ -26,6 +26,7 @@ use super::trust;
 const SETTINGS_FILE: &str = "modules.json";
 const FOLDER_KEY: &str = "folder";
 const NOTICE_KEY: &str = "noticeAcknowledged";
+pub(crate) const CATALOG_CHECKED_KEY: &str = "catalogCheckedAt";
 /// The app's bundled modules (`<id>-<version>.db.gz`) are in this resource folder.
 const BUNDLED_FOLDER: &str = "resources";
 /// Key statements are kept in this folder inside the modules folder.
@@ -37,6 +38,24 @@ const KEYS_FOLDER: &str = "keys";
 pub struct ModuleSummary {
     pub id: String,
     pub name: String,
+    pub version: String,
+    pub file: String,
+    /// From the module itself, so covered by its signed file hash.
+    pub description: String,
+    pub language: String,
+    pub license: String,
+    /// The app carries this module (`resources`).
+    pub built_in: bool,
+    /// Its text matched a pinned edition: exactly the text this app knows.
+    pub text_verified: bool,
+    /// Older versions of it in the folder, newest first.
+    pub older: Vec<OlderVersion>,
+}
+
+/// An older version of a module, kept beside the newest.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OlderVersion {
     pub version: String,
     pub file: String,
 }
@@ -55,6 +74,9 @@ pub struct FolderStatus {
     /// Problems a person should know about, such as files that aren't valid
     /// modules, in plain words.
     pub problems: Vec<String>,
+    /// When the module list was last checked, in seconds since 1970, if
+    /// ever. Portable copies don't record it.
+    pub catalog_checked_at: Option<u64>,
 }
 
 /// The current folder and status, shared across commands.
@@ -64,13 +86,13 @@ pub struct FolderState {
 }
 
 impl FolderState {
-    fn get(&self) -> Result<(Option<FolderChoice>, FolderStatus)> {
+    pub(crate) fn get(&self) -> Result<(Option<FolderChoice>, FolderStatus)> {
         self.current.lock().map(|guard| guard.clone()).map_err(|_| {
             ModuleError::Task("the folder state is unusable after an earlier failure".into())
         })
     }
 
-    fn set(&self, choice: Option<FolderChoice>, status: FolderStatus) -> Result<()> {
+    pub(crate) fn set(&self, choice: Option<FolderChoice>, status: FolderStatus) -> Result<()> {
         let mut guard = self.current.lock().map_err(|_| {
             ModuleError::Task("the folder state is unusable after an earlier failure".into())
         })?;
@@ -116,7 +138,7 @@ pub fn initialize<R: Runtime>(app: &AppHandle<R>) {
 
 /// Whether loading a folder also installs the bundled modules.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Install {
+pub(crate) enum Install {
     /// At startup and after changing folders.
     Bundled,
     /// When rescanning for modules copied in while the app is open.
@@ -125,7 +147,7 @@ enum Install {
 
 /// Installs the bundled modules if asked, then opens every module in the
 /// folder into the registry, replacing any opened before.
-fn load_folder<R: Runtime>(
+pub(crate) fn load_folder<R: Runtime>(
     app: &AppHandle<R>,
     choice: &FolderChoice,
     install: Install,
@@ -134,6 +156,7 @@ fn load_folder<R: Runtime>(
         folder: Some(choice.path.to_string_lossy().into_owned()),
         portable: choice.portable,
         show_notice: !choice.portable && read_setting(app, NOTICE_KEY) != Some(json!(true)),
+        catalog_checked_at: read_setting(app, CATALOG_CHECKED_KEY).and_then(|value| value.as_u64()),
         ..FolderStatus::default()
     };
 
@@ -190,19 +213,33 @@ fn load_folder<R: Runtime>(
     if let Err(error) = registry.clear() {
         status.problems.push(error.to_string());
     }
-    match store::scan(&choice.path) {
-        Ok((modules, skipped)) => {
-            for module in modules {
+    let built_in = bundled_file_names(app);
+    match store::scan_all(&choice.path) {
+        Ok(store::Scanned {
+            newest,
+            older,
+            skipped,
+        }) => {
+            for module in newest {
                 match registry.open(&module.id, &module.path) {
                     Ok(()) => status.modules.push(ModuleSummary {
-                        file: module
-                            .path
-                            .file_name()
-                            .map(|name| name.to_string_lossy().into_owned())
-                            .unwrap_or_default(),
+                        file: file_name(&module.path),
+                        built_in: built_in.contains(&file_name(&module.path)),
+                        older: older
+                            .iter()
+                            .filter(|other| other.id == module.id)
+                            .map(|other| OlderVersion {
+                                version: other.version.clone(),
+                                file: file_name(&other.path),
+                            })
+                            .collect(),
                         id: module.id,
                         name: module.name,
                         version: module.version,
+                        description: module.description,
+                        language: module.language,
+                        license: module.license,
+                        text_verified: module.text_verified,
                     }),
                     Err(error) => status
                         .problems
@@ -224,11 +261,40 @@ fn load_folder<R: Runtime>(
     status
 }
 
-fn read_setting<R: Runtime>(app: &AppHandle<R>, key: &str) -> Option<serde_json::Value> {
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// The module files the app carries: `eng_kjv-1.1.0.db` for a bundled
+/// `eng_kjv-1.1.0.db.gz`.
+fn bundled_file_names<R: Runtime>(app: &AppHandle<R>) -> Vec<String> {
+    app.path()
+        .resolve(BUNDLED_FOLDER, BaseDirectory::Resource)
+        .ok()
+        .and_then(|folder| std::fs::read_dir(folder).ok())
+        .map(|entries| {
+            entries
+                .filter_map(|entry| entry.ok())
+                .filter_map(|entry| {
+                    entry
+                        .file_name()
+                        .to_str()
+                        .and_then(|name| name.strip_suffix(".gz"))
+                        .filter(|name| name.ends_with(".db"))
+                        .map(str::to_string)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub(crate) fn read_setting<R: Runtime>(app: &AppHandle<R>, key: &str) -> Option<serde_json::Value> {
     app.store(SETTINGS_FILE).ok()?.get(key)
 }
 
-fn write_setting<R: Runtime>(app: &AppHandle<R>, key: &str, value: serde_json::Value) {
+pub(crate) fn write_setting<R: Runtime>(app: &AppHandle<R>, key: &str, value: serde_json::Value) {
     match app.store(SETTINGS_FILE) {
         Ok(settings) => {
             settings.set(key, value);

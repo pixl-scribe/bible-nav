@@ -8,13 +8,19 @@
 //! - `pins`: pinned editions, whose text the app knows by its text root.
 //! - `text_tree`: computes a module's text and content roots.
 //! - `queries`: the queries the app runs, with bound parameters.
+//! - `catalog`: the list of modules to download, checked entry by entry.
+//! - `download`: fetching the catalog and installing downloaded modules.
+//! - `downloads`: the Modules dialog's commands for the catalog.
 //! - `commands`: the Tauri commands the web page calls.
 //! - `store`: the visible modules folder on disk.
 //! - `folder`: connects the folder to the app, with its own commands.
 //! - `error`: the error type they share.
 
+pub mod catalog;
 pub mod commands;
 pub mod db;
+pub mod download;
+pub mod downloads;
 pub mod error;
 pub mod folder;
 pub mod integrity;

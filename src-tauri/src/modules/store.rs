@@ -100,6 +100,12 @@ pub struct FoundModule {
     pub version: String,
     pub name: String,
     pub path: PathBuf,
+    pub description: String,
+    pub language: String,
+    pub license: String,
+    /// Its text matched a pinned edition, so it's exactly the text this app
+    /// knows (`pins.rs`).
+    pub text_verified: bool,
 }
 
 /// What `install_bundled` did.
@@ -241,7 +247,15 @@ fn module_file_name(info: &queries::ModuleInfo) -> Result<String> {
         .fetch_id
         .as_deref()
         .ok_or_else(|| ModuleError::Unsupported("the module has no id (fetchId)".into()))?;
-    for (label, value) in [("id", id), ("version", info.version.as_str())] {
+    safe_file_name(id, &info.version)
+}
+
+/// `<id>-<version>.db`, after checking both are safe in a file name: no
+/// path separators, no leading dot, nothing but letters, digits, `.`, `_`
+/// and `-`. Ids and versions come from module files and catalogs, which
+/// anyone could write, so they never reach a path unchecked.
+pub fn safe_file_name(id: &str, version: &str) -> Result<String> {
+    for (label, value) in [("id", id), ("version", version)] {
         let safe = !value.is_empty()
             && !value.starts_with('.')
             && value
@@ -253,7 +267,7 @@ fn module_file_name(info: &queries::ModuleInfo) -> Result<String> {
             )));
         }
     }
-    Ok(format!("{id}-{}.db", info.version))
+    Ok(format!("{id}-{version}.db"))
 }
 
 /// Writes `README.txt` if the folder doesn't have one, leaving any existing
@@ -276,9 +290,26 @@ pub struct Skipped {
 /// Finds the modules in a folder. When one module id has several versions,
 /// only the newest is returned. Files that aren't valid modules are listed
 /// in `skipped` rather than causing an error.
+#[cfg(test)]
 pub fn scan(folder: &Path) -> Result<(Vec<FoundModule>, Vec<Skipped>)> {
-    let mut newest: BTreeMap<String, FoundModule> = BTreeMap::new();
-    let mut skipped = Vec::new();
+    let scanned = scan_all(folder)?;
+    Ok((scanned.newest, scanned.skipped))
+}
+
+/// Everything a scan of the folder found.
+#[derive(Debug, Default)]
+pub struct Scanned {
+    /// The newest valid version of each module id, which the app uses.
+    pub newest: Vec<FoundModule>,
+    /// Older valid versions, kept for sharing or as a fallback.
+    pub older: Vec<FoundModule>,
+    pub skipped: Vec<Skipped>,
+}
+
+/// Finds every valid module in a folder, newest version of each id first.
+pub fn scan_all(folder: &Path) -> Result<Scanned> {
+    let mut by_id: BTreeMap<String, Vec<FoundModule>> = BTreeMap::new();
+    let mut scanned = Scanned::default();
 
     for path in module_files(folder)? {
         let found = ModuleDb::open(&path).and_then(|db| {
@@ -291,24 +322,29 @@ pub fn scan(folder: &Path) -> Result<(Vec<FoundModule>, Vec<Skipped>)> {
                 version: info.version,
                 name: info.name,
                 path: path.clone(),
+                description: info.description,
+                language: info.language,
+                license: info.license,
+                text_verified: db.pin().is_some(),
             })
         });
         match found {
-            Ok(module) => {
-                let is_newer = newest.get(&module.id).is_none_or(|current| {
-                    compare_versions(&module.version, &current.version) == Ordering::Greater
-                });
-                if is_newer {
-                    newest.insert(module.id.clone(), module);
-                }
-            }
-            Err(error) => skipped.push(Skipped {
+            Ok(module) => by_id.entry(module.id.clone()).or_default().push(module),
+            Err(error) => scanned.skipped.push(Skipped {
                 path,
                 reason: error.to_string(),
             }),
         }
     }
-    Ok((newest.into_values().collect(), skipped))
+    for (_, mut versions) in by_id {
+        versions.sort_by(|a, b| compare_versions(&b.version, &a.version));
+        let mut versions = versions.into_iter();
+        if let Some(newest) = versions.next() {
+            scanned.newest.push(newest);
+        }
+        scanned.older.extend(versions);
+    }
+    Ok(scanned)
 }
 
 /// The `.db` files directly in a folder, ignoring hidden files, sorted by name.

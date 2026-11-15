@@ -35,6 +35,8 @@ const REQUIRED_TABLES: [&str; 7] = [
 /// callers run queries but not close or replace the connection.
 pub struct ModuleDb {
     conn: Connection,
+    /// The pinned edition its text matched, if any (`pins.rs`).
+    pin: Option<&'static pins::Pin>,
 }
 
 impl ModuleDb {
@@ -78,12 +80,18 @@ impl ModuleDb {
         let conn = Connection::open_with_flags(uri, flags)?;
         check_format(&conn)?;
         check_identity(&conn, &manifest)?;
-        pins::check_text(&conn, &manifest, pins::PINNED_EDITIONS)?;
-        Ok(Self { conn })
+        let pin = pins::check_text(&conn, &manifest, pins::PINNED_EDITIONS)?;
+        Ok(Self { conn, pin })
     }
 
     pub fn conn(&self) -> &Connection {
         &self.conn
+    }
+
+    /// The pinned edition this module's text was checked against, if any:
+    /// its text is exactly the one this app knows.
+    pub fn pin(&self) -> Option<&'static pins::Pin> {
+        self.pin
     }
 }
 

@@ -17,6 +17,7 @@ use super::integrity::Manifest;
 use super::text_tree::{self, Roots};
 
 /// A text this app knows by its text root: one major version of a module.
+#[derive(Debug)]
 pub struct Pin {
     pub module_id: &'static str,
     /// Every version with this major number has this text.
@@ -93,6 +94,18 @@ pub fn check_text(
         }
     };
 
+    check_pinned(manifest, &text_root, pins)
+}
+
+/// The pin rules alone, for a module whose text root is `text_root`: if
+/// its id is pinned, its major version must be pinned and the root must be
+/// that pin's. Used on computed roots when a module opens, and on a
+/// catalog entry's signed manifest before it's offered for download.
+pub fn check_pinned(
+    manifest: &Manifest,
+    text_root: &str,
+    pins: &'static [Pin],
+) -> Result<Option<&'static Pin>> {
     let for_id: Vec<&'static Pin> = pins
         .iter()
         .filter(|pin| pin.module_id == manifest.module.id)

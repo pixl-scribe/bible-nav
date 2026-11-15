@@ -12,6 +12,7 @@ pub fn run() {
         // reads them through the commands below. See src/modules/.
         .manage(modules::commands::ModuleRegistry::default())
         .manage(modules::folder::FolderState::default())
+        .manage(modules::downloads::CatalogState::default())
         .invoke_handler(tauri::generate_handler![
             modules::commands::module_info,
             modules::commands::books,
@@ -26,6 +27,11 @@ pub fn run() {
             modules::folder::dismiss_modules_folder_notice,
             modules::folder::change_modules_folder,
             modules::folder::rescan_modules,
+            modules::downloads::check_for_modules,
+            modules::downloads::download_module,
+            modules::downloads::cancel_module_download,
+            modules::downloads::delete_module_version,
+            modules::downloads::open_modules_folder,
         ])
         .setup(|app| {
             // Choose the visible modules folder, install the bundled modules

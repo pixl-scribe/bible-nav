@@ -30,6 +30,10 @@ tauri-plugin-dialog = "2"
 ed25519-dalek = "2"
 sha2 = "0.10"
 base64 = "0.22"
+# HTTP for the module catalog and downloads, only when the reader asks. TLS in
+# pure Rust with bundled root certificates; no automatic gzip decoding (the
+# .db.gz downloads are unpacked by flate2 after they're checked).
+ureq = { version = "3.5", default-features = false, features = ["rustls"] }
 
 [dev-dependencies]
 tempfile = "3"

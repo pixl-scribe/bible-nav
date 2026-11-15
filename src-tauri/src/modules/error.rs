@@ -24,6 +24,10 @@ pub enum ModuleError {
     UnknownModule(String),
     /// A background query task failed to finish.
     Task(String),
+    /// The module list or a module couldn't be fetched. Holds the reason.
+    Network(String),
+    /// The reader cancelled a download.
+    Cancelled,
 }
 
 impl fmt::Display for ModuleError {
@@ -36,6 +40,8 @@ impl fmt::Display for ModuleError {
             ModuleError::NotFound(what) => write!(f, "not found: {what}"),
             ModuleError::UnknownModule(id) => write!(f, "no open module with id \"{id}\""),
             ModuleError::Task(reason) => write!(f, "query task failed: {reason}"),
+            ModuleError::Network(reason) => write!(f, "network error: {reason}"),
+            ModuleError::Cancelled => write!(f, "cancelled"),
         }
     }
 }

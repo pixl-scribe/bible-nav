@@ -45,6 +45,9 @@ pub struct ManifestModule {
     pub id: String,
     pub version: String,
     pub format_version: i64,
+    /// The module's display name. Optional: the checks don't need it.
+    #[serde(default)]
+    pub name: Option<String>,
 }
 
 /// What the manifest says about the module's text. The roots are only what
@@ -119,9 +122,28 @@ pub fn verify(
             display_name(&sidecars.signatures)
         ))
     })?;
-    check_signatures(&manifest_bytes, &signatures, trust)?;
+    let manifest = check_manifest(&manifest_bytes, &signatures, trust, format_version)?;
+    if manifest.file.name != file_name {
+        return Err(untrusted(format!(
+            "its manifest is for {}, not {file_name}",
+            manifest.file.name
+        )));
+    }
+    check_file(module, manifest.file.size, &manifest.file.sha256)?;
+    Ok(manifest)
+}
 
-    let manifest: Manifest = serde_json::from_slice(&manifest_bytes)
+/// Checks a manifest's signatures and reads it: steps 1 and 2 of `verify`,
+/// without the module file. A catalog entry is checked this way before
+/// it's offered for download.
+pub fn check_manifest(
+    manifest_bytes: &[u8],
+    signatures: &str,
+    trust: &Trust,
+    format_version: i64,
+) -> Result<Manifest> {
+    check_signatures(manifest_bytes, signatures, trust)?;
+    let manifest: Manifest = serde_json::from_slice(manifest_bytes)
         .map_err(|error| untrusted(format!("its manifest can't be read: {error}")))?;
     if manifest.kind != MANIFEST_TYPE || manifest.manifest_version != 1 {
         return Err(untrusted(
@@ -134,13 +156,6 @@ pub fn verify(
             manifest.module.format_version
         )));
     }
-    if manifest.file.name != file_name {
-        return Err(untrusted(format!(
-            "its manifest is for {}, not {file_name}",
-            manifest.file.name
-        )));
-    }
-    check_file(module, manifest.file.size, &manifest.file.sha256)?;
     Ok(manifest)
 }
 
