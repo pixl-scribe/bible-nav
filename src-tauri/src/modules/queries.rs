@@ -108,12 +108,17 @@ pub struct ParagraphWindow {
     pub paragraphs: Vec<ParagraphRow>,
 }
 
-/// The verses around `center`, each with its headings.
+/// One whole chapter, for infinite scrolling: its paragraphs in reading
+/// order, each with its heading or verses. Paragraphs never cross chapters,
+/// so both groupings (paragraph and verse) draw from this.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct VerseWindow {
-    pub center: i64,
-    pub verses: Vec<VerseRow>,
+pub struct ChapterText {
+    /// The chapter's id, such as "GEN 1".
+    pub sid: String,
+    pub book_code: String,
+    pub chapter: i64,
+    pub paragraphs: Vec<ParagraphRow>,
 }
 
 /// A verse or a range of verses, given by sids such as "JHN 3:16".
@@ -364,6 +369,7 @@ pub fn verse_id_for_sid(conn: &Connection, sid: &str) -> Result<i64> {
 }
 
 /// The id of the paragraph that holds the verse with this sid.
+#[cfg(test)]
 pub fn paragraph_for_sid(conn: &Connection, sid: &str) -> Result<i64> {
     conn.query_row(
         "SELECT paragraph FROM verses WHERE sid = ?1",
@@ -445,28 +451,6 @@ pub fn paragraph_window(
     Ok(ParagraphWindow { center, paragraphs })
 }
 
-/// The verses from `before` verses ahead of `center` to `after` verses past
-/// it, plus any headings that appear before one of them.
-pub fn verse_window(
-    conn: &Connection,
-    center: i64,
-    before: u32,
-    after: u32,
-) -> Result<VerseWindow> {
-    let from = (center - i64::from(before)).max(1);
-    let to = center + i64::from(after);
-
-    let mut statement = conn.prepare(&format!(
-        "SELECT {VERSE_COLUMNS} FROM verses WHERE id BETWEEN ?1 AND ?2 ORDER BY id"
-    ))?;
-    let mut verses = statement
-        .query_map(params![from, to], verse_from_row)?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    assign_note_starts(conn, verses.iter_mut())?;
-    attach_headings(conn, &mut verses)?;
-    Ok(VerseWindow { center, verses })
-}
-
 /// Turns reference ranges into verse-id ranges, failing if a sid is unknown.
 fn id_ranges(conn: &Connection, ranges: &[RefRange]) -> Result<Vec<(i64, i64)>> {
     ranges
@@ -482,27 +466,38 @@ fn id_ranges(conn: &Connection, ranges: &[RefRange]) -> Result<Vec<(i64, i64)>> 
         .collect()
 }
 
-/// Builds `(id BETWEEN ? AND ?) OR (...)` with one pair of placeholders per
-/// range, and the matching parameter values. Only placeholders go into the
-/// SQL text; the values are bound separately.
-fn range_filter(id_ranges: &[(i64, i64)]) -> (String, Vec<i64>) {
+/// Builds the `WHERE` and `ORDER BY` parts for verses in the ranges, with
+/// one pair of placeholders per range in each, and the matching parameter
+/// values in the order the placeholders appear. Only placeholders go into
+/// the SQL text; the values are bound separately.
+///
+/// The verses come in the order the reader typed the references ("Romans 8;
+/// John 1" lists Romans first), and in canonical order within a range. A
+/// verse in more than one range comes once, with the first range naming it.
+/// So in `(id BETWEEN ? AND ?) OR (...)` the `CASE` below gives each verse
+/// the number of its first range, and `id` orders within it.
+fn range_filter(id_ranges: &[(i64, i64)]) -> (String, String, Vec<i64>) {
     let clause = vec!["(id BETWEEN ? AND ?)"; id_ranges.len()].join(" OR ");
-    let values = id_ranges
-        .iter()
-        .flat_map(|&(from, to)| [from, to])
+    let cases: String = (0..id_ranges.len())
+        .map(|position| format!(" WHEN id BETWEEN ? AND ? THEN {position}"))
         .collect();
-    (clause, values)
+    let order = format!("CASE{cases} END, id");
+    let pairs = id_ranges.iter().flat_map(|&(from, to)| [from, to]);
+    // Once for the WHERE clause, then again for the ORDER BY.
+    let values = pairs.clone().chain(pairs).collect();
+    (clause, order, values)
 }
 
-/// The sids of every verse in the ranges, in canonical order.
+/// The sids of every verse in the ranges, in the order the ranges were given
+/// (see `range_filter`).
 pub fn ref_sids(conn: &Connection, ranges: &[RefRange]) -> Result<Vec<String>> {
     let ids = id_ranges(conn, ranges)?;
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    let (clause, values) = range_filter(&ids);
+    let (clause, order, values) = range_filter(&ids);
     let mut statement = conn.prepare(&format!(
-        "SELECT sid FROM verses WHERE {clause} ORDER BY id"
+        "SELECT sid FROM verses WHERE {clause} ORDER BY {order}"
     ))?;
     let sids = statement
         .query_map(params_from_iter(values), |row| row.get(0))?
@@ -522,11 +517,11 @@ pub fn ref_verses(
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    let (clause, mut values) = range_filter(&ids);
+    let (clause, order, mut values) = range_filter(&ids);
     values.push(i64::from(limit));
     values.push(i64::from(offset));
     let mut statement = conn.prepare(&format!(
-        "SELECT {VERSE_COLUMNS} FROM verses WHERE {clause} ORDER BY id LIMIT ? OFFSET ?"
+        "SELECT {VERSE_COLUMNS} FROM verses WHERE {clause} ORDER BY {order} LIMIT ? OFFSET ?"
     ))?;
     let mut verses = statement
         .query_map(params_from_iter(values), verse_from_row)?
@@ -568,6 +563,63 @@ pub fn nearest_sid(conn: &Connection, sid: &str) -> Result<Option<String>> {
     Ok(found)
 }
 
+/// The chapter holding verse `sid` (or the nearest verse this module has),
+/// or the chapter `offset` chapters after it (negative: before it), in the
+/// module's book order. `None` past the first or last chapter, or if the
+/// book isn't in the module.
+pub fn chapter_at(conn: &Connection, sid: &str, offset: i32) -> Result<Option<ChapterText>> {
+    let Some(start) = nearest_sid(conn, sid)? else {
+        return Ok(None);
+    };
+    let (mut book_id, mut chapter): (i64, i64) = conn.query_row(
+        "SELECT bookId, chapter FROM verses WHERE sid = ?1",
+        [&start],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    // Step one chapter at a time; a reader asks for neighbours, so offsets
+    // are small.
+    let step = if offset < 0 {
+        "SELECT bookId, nbr FROM chapters
+         WHERE bookId < ?1 OR (bookId = ?1 AND nbr < ?2)
+         ORDER BY bookId DESC, nbr DESC LIMIT 1"
+    } else {
+        "SELECT bookId, nbr FROM chapters
+         WHERE bookId > ?1 OR (bookId = ?1 AND nbr > ?2)
+         ORDER BY bookId, nbr LIMIT 1"
+    };
+    for _ in 0..offset.unsigned_abs() {
+        let next: Option<(i64, i64)> = conn
+            .query_row(step, params![book_id, chapter], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .optional()?;
+        let Some(next) = next else {
+            return Ok(None);
+        };
+        (book_id, chapter) = next;
+    }
+    chapter_text(conn, book_id, chapter).map(Some)
+}
+
+fn chapter_text(conn: &Connection, book_id: i64, chapter: i64) -> Result<ChapterText> {
+    let (sid, book_code, first, last): (String, String, i64, i64) = conn.query_row(
+        "SELECT c.sid, b.code, min(p.id), max(p.id)
+         FROM chapters c JOIN books b ON b.id = c.bookId
+         JOIN paragraphs p ON p.bookId = c.bookId AND p.chapter = c.nbr
+         WHERE c.bookId = ?1 AND c.nbr = ?2",
+        params![book_id, chapter],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+    )?;
+    let after = u32::try_from(last - first).unwrap_or(0);
+    let window = paragraph_window(conn, first, 0, after)?;
+    Ok(ChapterText {
+        sid,
+        book_code,
+        chapter,
+        paragraphs: window.paragraphs,
+    })
+}
+
 /// Whether any verse has a footnote, for listing the module's Notes tab.
 pub fn has_notes(conn: &Connection) -> Result<bool> {
     Ok(conn.query_row(
@@ -601,6 +653,52 @@ pub fn chapter_notes(conn: &Connection, sid: &str) -> Result<Vec<VerseRow>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn verse_sids(chapter: &ChapterText) -> Vec<String> {
+        chapter
+            .paragraphs
+            .iter()
+            .flat_map(|paragraph| paragraph.verses.iter().map(|verse| verse.sid.clone()))
+            .collect()
+    }
+
+    #[test]
+    fn a_chapter_comes_whole_with_its_headings() {
+        let db = crate::modules::test_support::kjv();
+        let genesis = chapter_at(db.conn(), "GEN 1:5", 0).unwrap().unwrap();
+        assert_eq!(genesis.sid, "GEN 1");
+        assert_eq!(genesis.book_code, "GEN");
+        let sids = verse_sids(&genesis);
+        assert_eq!(sids.len(), 31);
+        assert_eq!(sids.first().map(String::as_str), Some("GEN 1:1"));
+        assert_eq!(sids.last().map(String::as_str), Some("GEN 1:31"));
+        // Psalm 3's title is a heading paragraph before verse 1.
+        let psalm = chapter_at(db.conn(), "PSA 3:1", 0).unwrap().unwrap();
+        assert_eq!(
+            psalm.paragraphs[0]
+                .heading
+                .as_ref()
+                .map(|h| h.style.as_str()),
+            Some("d")
+        );
+    }
+
+    #[test]
+    fn neighbouring_chapters_cross_books_and_stop_at_the_ends() {
+        let db = crate::modules::test_support::kjv();
+        let conn = db.conn();
+        let sid = |sid: &str, offset: i32| chapter_at(conn, sid, offset).unwrap().map(|c| c.sid);
+        assert_eq!(sid("MAL 4:6", 1).as_deref(), Some("MAT 1"));
+        assert_eq!(sid("MAT 1:1", -1).as_deref(), Some("MAL 4"));
+        assert_eq!(sid("GEN 1:1", -1), None);
+        assert_eq!(sid("REV 22:21", 1), None);
+        // Psalm 117 has two verses; its neighbours are found all the same.
+        assert_eq!(sid("PSA 116:1", 1).as_deref(), Some("PSA 117"));
+        assert_eq!(sid("PSA 116:1", 2).as_deref(), Some("PSA 118"));
+        let short = chapter_at(conn, "PSA 117:1", 0).unwrap().unwrap();
+        assert_eq!(verse_sids(&short), ["PSA 117:1", "PSA 117:2"]);
+        assert_eq!(sid("XYZ 1:1", 0), None);
+    }
 
     #[test]
     fn the_nearest_verse_stands_in_for_a_missing_one() {
@@ -748,36 +846,6 @@ mod tests {
     }
 
     #[test]
-    fn verse_window_puts_a_psalm_title_before_verse_1() {
-        let db = kjv();
-        let psalm_3_1 = verse_id_for_sid(db.conn(), "PSA 3:1").unwrap();
-        let window = verse_window(db.conn(), psalm_3_1, 1, 1).unwrap();
-        assert_eq!(
-            heading_places(&window.verses),
-            [
-                ("PSA 2:12".into(), vec![], vec![]),
-                ("PSA 3:1".into(), vec!["d"], vec![]),
-                ("PSA 3:2".into(), vec![], vec![]),
-            ]
-        );
-    }
-
-    #[test]
-    fn a_closing_note_follows_its_own_chapter() {
-        let db = kjv();
-        let last = verse_id_for_sid(db.conn(), "ROM 16:27").unwrap();
-        let window = verse_window(db.conn(), last, 0, 1).unwrap();
-        // Not before the next book's first verse.
-        assert_eq!(
-            heading_places(&window.verses),
-            [
-                ("ROM 16:27".into(), vec![], vec!["s1"]),
-                ("1CO 1:1".into(), vec![], vec![]),
-            ]
-        );
-    }
-
-    #[test]
     fn reference_results_carry_their_headings() {
         let db = kjv();
         let page = ref_verses(db.conn(), &[range("PSA 3:1", Some("PSA 3:2"))], 0, 10).unwrap();
@@ -797,13 +865,7 @@ mod tests {
     }
 
     #[test]
-    fn verse_window_stops_at_the_start_of_the_module() {
-        let window = verse_window(kjv().conn(), 1, 40, 1).unwrap();
-        assert_eq!(window.verses[0].sid, "GEN 1:1");
-    }
-
-    #[test]
-    fn reference_ranges_return_verses_in_order() {
+    fn reference_ranges_return_verses_in_the_order_typed() {
         let db = kjv();
         let ranges = [
             range("ROM 8:1", Some("ROM 8:2")),
@@ -812,7 +874,24 @@ mod tests {
         let sids = ref_sids(db.conn(), &ranges).unwrap();
         assert_eq!(
             sids,
-            ["JHN 3:16", "JHN 3:17", "JHN 3:18", "ROM 8:1", "ROM 8:2"]
+            ["ROM 8:1", "ROM 8:2", "JHN 3:16", "JHN 3:17", "JHN 3:18"]
+        );
+        // Pages follow the same order, across the ranges.
+        let page = ref_verses(db.conn(), &ranges, 1, 2).unwrap();
+        let found: Vec<(i64, &str)> = page.iter().map(|v| (v.idx, v.verse.sid.as_str())).collect();
+        assert_eq!(found, [(1, "ROM 8:2"), (2, "JHN 3:16")]);
+    }
+
+    #[test]
+    fn a_verse_in_two_ranges_comes_once_where_first_named() {
+        let ranges = [
+            range("ROM 8:3", Some("ROM 8:5")),
+            range("ROM 8:1", Some("ROM 8:4")),
+        ];
+        let sids = ref_sids(kjv().conn(), &ranges).unwrap();
+        assert_eq!(
+            sids,
+            ["ROM 8:3", "ROM 8:4", "ROM 8:5", "ROM 8:1", "ROM 8:2"]
         );
     }
 
@@ -872,11 +951,6 @@ mod tests {
             psalm_12_note_starts(&verses),
             [(4, 4), (5, 5), (6, 6), (7, 6), (8, 7)]
         );
-
-        let verse_id = verse_id_for_sid(db.conn(), "PSA 12:8").unwrap();
-        let window = verse_window(db.conn(), verse_id, 2, 0).unwrap();
-        let verses: Vec<&VerseRow> = window.verses.iter().collect();
-        assert_eq!(psalm_12_note_starts(&verses), [(6, 6), (7, 6), (8, 7)]);
     }
 
     #[test]

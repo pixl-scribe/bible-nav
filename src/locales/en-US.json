@@ -12,6 +12,7 @@
   "bible-text.book": "Book: ",
   "bible-text.main-text": "Main text",
   "bible-text.parallel": "Parallel",
+  "bible-text.word-search-later": "Searching for words isn't available yet. Try a reference, such as John 1:18.",
   "parallel.label": "Parallel pane",
   "parallel.tabs": "Parallel texts and tools",
   "parallel.add": "Add a parallel tab",

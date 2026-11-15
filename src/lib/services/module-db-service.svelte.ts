@@ -10,25 +10,13 @@ import type {
   Verse,
   VerseRow,
 } from '$lib/model/verse';
-import { calcLimitAndOffsetWithButter } from '$lib/services/calc-limit-and-offset';
 import { osisToRanges, type RefRange } from '$lib/services/osis-to-ranges';
+import type { Chapter } from '$lib/services/chapter-text';
 import {
   letterNotes,
   notesIn,
   parseChildren,
 } from '$lib/services/verse-content';
-
-/** Paragraphs kept on each side of the active one. */
-export const paraBuffer = 20;
-/** Verses kept on each side of the active one. */
-export const verseBuffer = 40;
-
-/** The active item, with the items before and after it, in reading order. */
-export interface TextWindow<T> {
-  prev: T[];
-  active: T | undefined;
-  next: T[];
-}
 
 interface ModuleInfo {
   name: string;
@@ -38,14 +26,11 @@ interface ModuleInfo {
   formatVersion: number;
 }
 
-interface ParagraphWindowRow {
-  center: number;
+interface ChapterRow {
+  sid: string;
+  bookCode: string;
+  chapter: number;
   paragraphs: ParagraphRow[];
-}
-
-interface VerseWindowRow {
-  center: number;
-  verses: VerseRow[];
 }
 
 function toHeading(row: HeadingRow): Heading {
@@ -66,14 +51,6 @@ function toParagraph(row: ParagraphRow): Paragraph {
     ...row,
     heading: row.heading ? toHeading(row.heading) : undefined,
     verses: row.verses.map((verse) => toVerse(verse)),
-  };
-}
-
-function split<T>(items: T[], position: (item: T) => number): TextWindow<T> {
-  return {
-    prev: items.filter((item) => position(item) < 0),
-    active: items.find((item) => position(item) === 0),
-    next: items.filter((item) => position(item) > 0),
   };
 }
 
@@ -118,50 +95,47 @@ export default class ModuleDbService {
     return Object.fromEntries(books.map((book) => [book.code, book]));
   }
 
-  /** The paragraphs around the one holding verse `sid`. */
-  public async getParagraphsAtSid(sid: string): Promise<TextWindow<Paragraph>> {
-    const window = await invoke<ParagraphWindowRow>('paragraph_window_at_sid', {
+  /**
+   * One whole chapter: the chapter holding verse `sid`, or `offset`
+   * chapters after (positive) or before (negative) it. Undefined past
+   * either end of the module.
+   */
+  public async getChapter(
+    sid: string,
+    offset = 0
+  ): Promise<Chapter | undefined> {
+    const row = await invoke<ChapterRow | null>('chapter_at', {
       moduleId: this.moduleId,
       sid,
-      before: paraBuffer,
-      after: paraBuffer,
+      offset,
     });
-    return this.paragraphWindow(window);
+    if (!row) return undefined;
+    return {
+      sid: row.sid,
+      bookCode: row.bookCode,
+      chapter: row.chapter,
+      paragraphs: row.paragraphs.map(toParagraph),
+    };
   }
 
-  /** The paragraphs around paragraph `paragraphId`. */
-  public async getParagraphs(
-    paragraphId: number
-  ): Promise<TextWindow<Paragraph>> {
-    const window = await invoke<ParagraphWindowRow>('paragraph_window', {
+  /**
+   * A page of the verses in an OSIS reference: `limit` of them from result
+   * number `offset`, each with any headings around it.
+   */
+  public async getRefVerses(
+    osisRef: string,
+    offset: number,
+    limit: number
+  ): Promise<Verse[]> {
+    const ranges: RefRange[] = osisToRanges(osisRef);
+    if (ranges.length === 0) return [];
+    const rows = await invoke<VerseRow[]>('ref_verses', {
       moduleId: this.moduleId,
-      center: paragraphId,
-      before: paraBuffer,
-      after: paraBuffer,
+      ranges,
+      offset,
+      limit,
     });
-    return this.paragraphWindow(window);
-  }
-
-  /** The verses around verse `sid`, each with any headings shown before it. */
-  public async getVersesAtSid(sid: string): Promise<TextWindow<Verse>> {
-    const window = await invoke<VerseWindowRow>('verse_window_at_sid', {
-      moduleId: this.moduleId,
-      sid,
-      before: verseBuffer,
-      after: verseBuffer,
-    });
-    return this.verseWindow(window);
-  }
-
-  /** The verses around verse `verseId`. */
-  public async getVerses(verseId: number): Promise<TextWindow<Verse>> {
-    const window = await invoke<VerseWindowRow>('verse_window', {
-      moduleId: this.moduleId,
-      center: verseId,
-      before: verseBuffer,
-      after: verseBuffer,
-    });
-    return this.verseWindow(window);
+    return rows.map((row) => toVerse(row));
   }
 
   /** Every verse sid in an OSIS reference such as 'John.3.16-John.3.18'. */
@@ -169,29 +143,6 @@ export default class ModuleDbService {
     const ranges = osisToRanges(osisRef);
     if (ranges.length === 0) return [];
     return invoke<string[]>('ref_sids', { moduleId: this.moduleId, ranges });
-  }
-
-  /**
-   * The verses around result number `index` within an OSIS reference, as
-   * `prev`, `active`, and `next` by their position in the results.
-   */
-  public async getVersesByRef(
-    osisRef: string,
-    index: number = 0
-  ): Promise<TextWindow<Verse>> {
-    const ranges: RefRange[] = osisToRanges(osisRef);
-    if (ranges.length === 0) return { prev: [], active: undefined, next: [] };
-    const { limit, offset } = calcLimitAndOffsetWithButter(verseBuffer, index);
-    const rows = await invoke<VerseRow[]>('ref_verses', {
-      moduleId: this.moduleId,
-      ranges,
-      offset,
-      limit,
-    });
-    return split(
-      rows.map((row) => toVerse(row)),
-      (verse) => (verse.idx ?? 0) - index
-    );
   }
 
   /**
@@ -209,20 +160,6 @@ export default class ModuleDbService {
         letter: note.letter ?? '',
         note,
       }))
-    );
-  }
-
-  private paragraphWindow(window: ParagraphWindowRow): TextWindow<Paragraph> {
-    return split(
-      window.paragraphs.map(toParagraph),
-      (paragraph) => paragraph.id - window.center
-    );
-  }
-
-  private verseWindow(window: VerseWindowRow): TextWindow<Verse> {
-    return split(
-      window.verses.map(toVerse),
-      (verse) => verse.id - window.center
     );
   }
 }

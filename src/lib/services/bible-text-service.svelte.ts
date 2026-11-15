@@ -1,228 +1,333 @@
-import type { Paragraph, Verse } from '$lib/model/verse';
+import type { Verse } from '$lib/model/verse';
 import type { Book } from '$lib/model/book';
 import { tick, untrack } from 'svelte';
 import debounce from '$lib/services/debounce';
-import rawVerseCounts from '$lib/assets/bible-verse-counts.yaml';
-import type { BibleVerseCounts } from '$lib/model/bible-verse-counts';
-import { appSettingsService } from './app-settings-service.svelte';
+import {
+  appSettingsService,
+  type GroupingMode,
+} from './app-settings-service.svelte';
 import type { AutoCompleteOption } from '$lib/model/auto-complete-option';
 import { splitByLastDelimiter } from '$lib/services/string-utils';
-import { parseSearch, type SearchType } from '$lib/services/search-parser';
-import ModuleDbService, {
-  paraBuffer,
-  verseBuffer,
-} from '$lib/services/module-db-service.svelte';
+import { parseSearch } from '$lib/services/search-parser';
+import ModuleDbService from '$lib/services/module-db-service.svelte';
+import {
+  chapterOfSid,
+  firstVerseOf,
+  type Chapter,
+} from '$lib/services/chapter-text';
 
-export type GroupingMode = 'verse' | 'paragraph';
-const defaultSearch = 'GEN 1:1';
-//const defaultSearch = 'Gen.1.1-Gen.5.20';
-const defaultSearchType: SearchType = 'ref-point';
-//const defaultSearchType: SearchType = 'ref';
-const defaultGroupingMode: GroupingMode = 'paragraph';
-//const defaultGroupingMode: GroupingMode = 'verse';
-const selectInProgressTimeout = 500;
+/**
+ * How the pane shows text:
+ * - 'chapters': whole chapters, in the reader's grouping, scrolled through
+ *   endlessly (an empty search, or a place such as "John 3:16").
+ * - 'list': the verses of a reference range or list, one by one ("John
+ *   3:16-18"), loading more near the end.
+ * - 'text': a word search, not built yet.
+ */
+export type ViewMode = 'chapters' | 'list' | 'text';
 
-const verseCounts = rawVerseCounts as BibleVerseCounts;
-const allVerseCounts = { ...verseCounts.OT, ...verseCounts.NT };
-const verseCount = Object.values(allVerseCounts).reduce(
-  (acc, curr) => acc + curr.reduce((acc2, curr2) => acc2 + curr2, 0),
-  0
-); // 31,102 verses
+/** A verse for the pane to bring to its top (or, `smooth`, into view). */
+export interface ScrollTarget {
+  sid: string;
+  /** Glide to it and centre it, as for a Notes tab heading. */
+  smooth?: boolean;
+}
+
+export type { GroupingMode };
+
+/** Where reading starts. */
+const startSid = 'GEN 1:1';
+/** Verses loaded at a time in a list. */
+const listPage = 100;
 const searchDelimiters = [' ', ',', ';'];
 
+/**
+ * One reading pane's text: which module, what the search asks for, and the
+ * chapters or verses loaded. The pane (bible-text.svelte) does everything
+ * that needs the screen: loading more near either end, keeping the text
+ * still when chapters come and go above, and bringing verses to the top.
+ */
 export default class BibleTextService {
-  private getTextStart = $state<number | undefined>();
-  private getTextDebounced = debounce(this.getText, 100);
-  private getVersesByRefAndIndexDebounced = debounce(
-    this.getVersesByRefAndIndex,
-    100
-  );
-  private _groupingMode = $state<GroupingMode>(defaultGroupingMode);
   private moduleDbService: ModuleDbService;
-  private _scrollPct = $state<number | undefined>(undefined);
+  /** Counts loads, so an answer for a superseded one is dropped. */
+  private loadSeq = 0;
+  private searchDebounced = debounce(() => this.performSearch(), 250);
+
+  /** The module this text reads; `setModule` switches it. */
+  public moduleId = $state<string>('');
+  public moduleName = $state<string>('');
+  public moduleVersion = $state<string>('');
+  /** A short name for the module, such as "KJV". */
+  public moduleAbbreviation = $state<string>('');
+  public books = $state<Record<string, Book>>({});
+  /** The last load's error, for `errorMessage` to describe. */
+  public loadError = $state<unknown>(undefined);
 
   // This field is only modified by user search input.
   public searchInput = $state<string>('');
   public autoCompleteOptions = $state<AutoCompleteOption[]>([]);
-  // These are modified both by controls and the search input.
-  public currentSearch = $state<string>(defaultSearch);
-  public currentSearchType = $state<SearchType>(defaultSearchType);
-  public prevParaBuffer = $state<Paragraph[]>([]);
-  public activePara = $state<Paragraph | undefined>(undefined);
-  public nextParaBuffer = $state<Paragraph[]>([]);
-  public prevVerseBuffer = $state<Verse[]>([]);
-  public activeVerse = $state<Verse | undefined>(undefined);
-  public nextVerseBuffer = $state<Verse[]>([]);
-  public sids = $state<string[]>([]);
-  public sidIndex = $state<number>(0);
-  public books = $state<Record<string, Book>>({});
-  public scrollToSid = $state<string | undefined>();
-  public selectInProgress = $state<boolean>(true);
-  public adjustingScrollPct = $state<boolean>(false);
-  public moduleName = $state<string>('');
-  /** The module's version, such as "1.1.0". */
-  public moduleVersion = $state<string>('');
-  /** A short name for the module, such as "KJV". */
-  public moduleAbbreviation = $state<string>('');
-  /** The verse to highlight, after a Notes tab heading took the reader there. */
-  public highlightSid = $state<string | undefined>();
-  /** A verse the pane should bring into view (see bible-text.svelte). */
-  public revealSid = $state<string | undefined>();
-  /**
-   * The verse at the top of the pane, updated as the reader scrolls (see
-   * bible-text.svelte). Parallel texts follow it.
-   */
+  public autoCompletePickInProgress = $state<boolean>(false);
+
+  public mode = $state<ViewMode>('chapters');
+  /** The loaded chapters, in reading order, next to each other. */
+  public chapters = $state<Chapter[]>([]);
+  /** The reference shown as a list, in OSIS form. */
+  public listOsis = $state<string | undefined>();
+  public listVerses = $state<Verse[]>([]);
+  /** How many verses the whole list has. */
+  public listTotal = $state(0);
+  /** A chapter or page is loading. */
+  public loading = $state(false);
+
+  /** The verse at the top of the pane, measured as the reader scrolls. */
   public topSid = $state<string | undefined>();
   /**
-   * A verse the pane should put at its top at once, without highlighting
-   * it: a parallel text keeping in step with the main text.
+   * When the reader last moved this text themselves (scrolling it, or a
+   * search or a Notes heading taking it somewhere), from
+   * `performance.now()`. Of a main text and its parallel text, the one
+   * moved last leads and the other follows. Not reactive: it's only read
+   * when a pane's top verse changes.
    */
-  public alignSid = $state<string | undefined>();
+  public leadAt = 0;
   /**
-   * A verse to put at the top once the text being loaded is in place: set
-   * when aligning needed a load first.
+   * Where the reader was last reading chapters, to come back to when a
+   * search is cleared.
    */
-  public alignAfterLoad = $state<string | undefined>();
-  public referenceLabel = $state<string>('');
-  public autoCompletePickInProgress = $state<boolean>(false);
-  /** A problem loading text, such as a missing module, to show the reader. */
-  /** The last load's error, for `errorMessage` to describe. */
-  public loadError = $state<unknown>(undefined);
-
-  /** The module this text reads; `setModule` switches it. */
-  public moduleId = $state<string>('');
+  public browseSid = $state<string>(startSid);
+  /** A verse the pane should bring to its top. */
+  public scrollTarget = $state<ScrollTarget | undefined>();
+  /** The verse highlighted with its note in a Notes tab. */
+  public highlightSid = $state<string | undefined>();
 
   /**
    * @param moduleId the module to read.
-   * @param startSid a verse to start at, such as the main text's place
-   *   when a parallel text opens; otherwise the default start.
+   * @param start a verse to start at, such as the main text's place when a
+   *   parallel text opens; otherwise Genesis 1:1.
    */
-  constructor(moduleId: string, startSid?: string) {
+  constructor(moduleId: string, start?: string) {
     this.moduleId = moduleId;
-    if (startSid) this.currentSearch = startSid;
     this.moduleDbService = new ModuleDbService(moduleId);
     this.getModule().catch((err) => (this.loadError = err));
     this.getBooks().catch((err) => (this.loadError = err));
-    this.getText(this.currentSearch, this.currentSearchType).then();
+    this.openAt(start ?? startSid);
 
-    // Watch search and search type.
-    $effect(() => {
-      const groupingMode = appSettingsService.groupingMode;
-      const currentSearch = this.currentSearch ?? defaultSearch;
-      const currentSearchType = this.currentSearchType ?? defaultSearchType;
-      untrack(() => {
-        this.groupingMode = groupingMode;
-        this.selectInProgress = true;
-        this.getTextDebounced(currentSearch, currentSearchType).then(() => {
-          // Need to wait for scrolling to finish.
-          setTimeout(() => {
-            this.selectInProgress = false;
-          }, 1000);
-        });
-      });
-    });
-
-    // Watch scroll pct.
-    /**
-     * Watches scroll value and reloads text when it changes.
-     */
-    $effect(() => {
-      const newScrollValue = this.scrollPct;
-      untrack(() => {
-        if (this.adjustingScrollPct) return;
-        switch (this.currentSearchType) {
-          case 'ref-point':
-            this.setSearchFromPct(newScrollValue);
-            break;
-          case 'ref':
-            this.setSearchWithinSidList(newScrollValue).then();
-            break;
-        }
-      });
-    });
-
-    /**
-     * Setting the scroll to the top after books load.
-     */
-    $effect(() => {
-      // Need to wait for books to be read before setting the scroll value.
-      if (this.books && Object.keys(this.books).length > 0) {
-        this._scrollPct = 0; // This sets the reference to GEN 1:1
-      }
-    });
-
+    // Search only when the words change. The first run sees the empty box
+    // the pane starts with: searching then would count as clearing a search
+    // and send the pane back to Genesis 1:1, over the list a new parallel
+    // text has just loaded to match its main text.
+    let evaluated = this.searchInput;
     $effect(() => {
       const searchInput = this.searchInput;
-      untrack(() => {
-        this.evaluateSearchInput(searchInput);
-      });
+      if (searchInput === evaluated) return;
+      evaluated = searchInput;
+      untrack(() => this.evaluateSearchInput(searchInput));
+    });
+
+    // Remember the reading place, for when a search is cleared.
+    $effect(() => {
+      const sid = this.topSid;
+      if (sid && this.mode === 'chapters') {
+        untrack(() => (this.browseSid = sid));
+      }
     });
   }
 
-  public get groupingMode() {
-    return this._groupingMode;
-  }
-
-  private set groupingMode(groupingMode: 'verse' | 'paragraph') {
-    this._groupingMode = groupingMode;
-  }
-
-  public get bufferSize() {
-    return this.groupingMode === 'paragraph' ? paraBuffer : verseBuffer;
-  }
-
-  public get scrollPct() {
-    return this._scrollPct;
-  }
-
-  public set scrollPct(pct: number | undefined) {
-    switch (true) {
-      case this.currentSearchType === 'ref-point':
-        this._scrollPct = pct;
-        break;
-      case this.currentSearchType === 'ref':
-        this.setScrollPctRef(pct);
-        break;
-    }
-  }
-
-  private setScrollPctRef(pct: number | undefined): void {
-    if (this.sids.length <= 1 || !pct) return;
-    const stepSize = Math.max(Math.round(100 / (this.sids.length - 1)), 1);
-    this._scrollPct = Math.round(pct / stepSize) * stepSize;
+  public get groupingMode(): GroupingMode {
+    return appSettingsService.groupingMode;
   }
 
   /** A verse in the text being read, such as 'PSA 12:1'. */
   public get sidInView(): string | undefined {
-    const paragraphs = [this.activePara, ...this.nextParaBuffer];
-    for (const paragraph of paragraphs) {
-      const verse = paragraph?.verses[0];
-      if (verse) return verse.sid;
-    }
-    return this.activeVerse?.sid;
+    return this.topSid;
+  }
+
+  /** The place shown beside the selector, such as 'Gen 1:8'. */
+  public get referenceLabel(): string {
+    return this.topSid ? this.formatAbbreviatedRefFromSid(this.topSid) : '';
+  }
+
+  /** Whether the chapter holding `sid` is loaded. */
+  public hasChapterOf(sid: string): boolean {
+    const chapter = chapterOfSid(sid);
+    return this.chapters.some((loaded) => loaded.sid === chapter);
   }
 
   /**
-   * Takes the reader to verse `sid` and highlights it. The pane scrolls to it
-   * if it's loaded, or loads the text there (see bible-text.svelte).
+   * Shows chapters from verse `sid` (or the nearest verse this module has):
+   * loads its chapter and brings the verse to the top. The pane then loads
+   * the chapters around it.
    */
-  /**
-   * Shows the verse `sid`, or the nearest verse this module has, for a
-   * parallel text following the main text. Does nothing if the module
-   * lacks the book.
-   */
-  public async goToNearest(sid: string): Promise<void> {
+  public async openAt(sid: string): Promise<void> {
+    const seq = ++this.loadSeq;
+    this.mode = 'chapters';
+    this.listOsis = undefined;
+    this.listVerses = [];
+    this.loading = true;
     try {
-      const target = await this.moduleDbService.nearestSid(sid);
-      if (target) this.goToSid(target);
+      const target = (await this.moduleDbService.nearestSid(sid)) ?? sid;
+      const chapter = await this.moduleDbService.getChapter(target);
+      if (seq !== this.loadSeq) return;
+      this.chapters = chapter ? [chapter] : [];
+      this.loadError = undefined;
+      this.scrollTarget = { sid: target };
+    } catch (err) {
+      if (seq === this.loadSeq) this.loadError = err;
+    } finally {
+      if (seq === this.loadSeq) this.loading = false;
+    }
+  }
+
+  /**
+   * Loads the chapter after the last one (`direction` 1) or before the
+   * first (-1). Returns whether one was added: false at either end of the
+   * module, or while another load is under way.
+   */
+  public async extend(direction: 1 | -1): Promise<boolean> {
+    if (this.loading || this.mode !== 'chapters') return false;
+    const edge =
+      direction === 1
+        ? this.chapters[this.chapters.length - 1]
+        : this.chapters[0];
+    if (!edge) return false;
+    const seq = this.loadSeq;
+    this.loading = true;
+    try {
+      const chapter = await this.moduleDbService.getChapter(
+        firstVerseOf(edge.sid),
+        direction
+      );
+      if (!chapter || seq !== this.loadSeq) return false;
+      this.chapters =
+        direction === 1
+          ? [...this.chapters, chapter]
+          : [chapter, ...this.chapters];
+      return true;
     } catch (err) {
       this.loadError = err;
+      return false;
+    } finally {
+      if (seq === this.loadSeq) this.loading = false;
     }
   }
 
+  /** Drops `count` chapters from the start (`front`) or the end. */
+  public drop(count: number, front: boolean): void {
+    if (count <= 0) return;
+    this.chapters = front
+      ? this.chapters.slice(count)
+      : this.chapters.slice(0, this.chapters.length - count);
+  }
+
+  /**
+   * Shows the verses of an OSIS reference one by one, a page at a time,
+   * starting at verse `at` if the list has it (a parallel text opening
+   * beside the main text's list, or a Bible switched), else at the top.
+   */
+  public async showList(osis: string, at?: string): Promise<void> {
+    const seq = ++this.loadSeq;
+    this.mode = 'list';
+    this.listOsis = osis;
+    this.listVerses = [];
+    this.listTotal = 0;
+    this.chapters = [];
+    this.loading = true;
+    try {
+      const sids = await this.moduleDbService.getSidsByRef(osis);
+      // Load as far as `at`, if it's in the list, and a page beyond.
+      const index = at ? sids.indexOf(at) : -1;
+      const verses = await this.moduleDbService.getRefVerses(
+        osis,
+        0,
+        Math.max(listPage, index + listPage)
+      );
+      if (seq !== this.loadSeq) return;
+      this.listTotal = sids.length;
+      this.listVerses = verses;
+      this.loadError = undefined;
+      const target = index >= 0 ? at : verses[0]?.sid;
+      if (target) this.scrollTarget = { sid: target };
+    } catch (err) {
+      if (seq === this.loadSeq) this.loadError = err;
+    } finally {
+      if (seq === this.loadSeq) this.loading = false;
+    }
+  }
+
+  /** Loads the next page of a list. Returns whether any verses came. */
+  public async loadMoreList(): Promise<boolean> {
+    const osis = this.listOsis;
+    if (
+      this.loading ||
+      this.mode !== 'list' ||
+      !osis ||
+      this.listVerses.length >= this.listTotal
+    ) {
+      return false;
+    }
+    const seq = this.loadSeq;
+    this.loading = true;
+    try {
+      const more = await this.moduleDbService.getRefVerses(
+        osis,
+        this.listVerses.length,
+        listPage
+      );
+      if (seq !== this.loadSeq || more.length === 0) return false;
+      this.listVerses = [...this.listVerses, ...more];
+      return true;
+    } catch (err) {
+      this.loadError = err;
+      return false;
+    } finally {
+      if (seq === this.loadSeq) this.loading = false;
+    }
+  }
+
+  /** A word search: not built yet, so the pane says so. */
+  public showText(): void {
+    ++this.loadSeq;
+    this.mode = 'text';
+    this.chapters = [];
+    this.listOsis = undefined;
+    this.listVerses = [];
+    this.loading = false;
+  }
+
+  /**
+   * Brings verse `sid` to the top at once, loading its chapter if needed:
+   * one of two texts keeping in step with the other.
+   */
+  public async align(sid: string): Promise<void> {
+    if (this.mode === 'chapters') {
+      if (this.hasChapterOf(sid)) {
+        this.scrollTarget = { sid };
+      } else {
+        await this.openAt(sid);
+      }
+    } else if (this.mode === 'list') {
+      if (this.listVerses.some((verse) => verse.sid === sid)) {
+        this.scrollTarget = { sid };
+      }
+    }
+  }
+
+  /** The reader is moving this text: it leads, and its partner follows. */
+  public lead(): void {
+    this.leadAt = performance.now();
+  }
+
+  /**
+   * Takes the reader to verse `sid` and highlights it, as a Notes tab heading
+   * does: glides there if its chapter is loaded, or loads it there.
+   */
   public goToSid(sid: string): void {
+    this.lead();
     this.highlightSid = sid;
-    this.revealSid = sid;
+    if (this.mode === 'chapters' && this.hasChapterOf(sid)) {
+      this.scrollTarget = { sid, smooth: true };
+    } else {
+      this.openAt(sid);
+    }
   }
 
   /** The footnotes in the chapter holding verse `sid`, for the Notes tab. */
@@ -230,35 +335,26 @@ export default class BibleTextService {
     return this.moduleDbService.getChapterNotes(sid);
   }
 
-  /** Loads the text at verse `sid`, which then scrolls into view. */
   /**
-   * Loads the text at `sid`, or at the nearest verse this module has, for a
-   * parallel text whose verse isn't loaded yet.
+   * Switches this text to another module, keeping the reader's place:
+   * chapters reopen at the verse at the top (or the nearest the new module
+   * has), and a list is shown again from the new module.
    */
-  public async loadNearest(sid: string): Promise<void> {
+  public async setModule(moduleId: string): Promise<void> {
+    if (moduleId === this.moduleId) return;
+    this.moduleId = moduleId;
+    this.moduleDbService = new ModuleDbService(moduleId);
+    this.loadError = undefined;
     try {
-      const target = await this.moduleDbService.nearestSid(sid);
-      if (!target) return;
-      this.alignAfterLoad = target;
-      if (
-        target === this.currentSearch &&
-        this.currentSearchType === 'ref-point'
-      ) {
-        // Already the search, so watching it won't load it: load directly.
-        this.selectInProgress = true;
-        await this.getText(target, 'ref-point');
-        this.selectInProgress = false;
-      } else {
-        this.loadAtSid(target);
-      }
+      await Promise.all([this.getModule(), this.getBooks()]);
     } catch (err) {
       this.loadError = err;
     }
-  }
-
-  public loadAtSid(sid: string): void {
-    this.currentSearch = sid;
-    this.currentSearchType = 'ref-point';
+    if (this.mode === 'chapters') {
+      await this.openAt(this.topSid ?? this.browseSid);
+    } else if (this.mode === 'list' && this.listOsis) {
+      await this.showList(this.listOsis, this.topSid);
+    }
   }
 
   /** A chapter's name from any verse in it: 'PSA 12:3' gives 'Psalms 12'. */
@@ -287,82 +383,6 @@ export default class BibleTextService {
     const book = this.books[bookId];
     if (!book) return '';
     return `${book.toc3} ${verseRef}`;
-  }
-
-  /**
-   * Sets currentSearch based on percent of entire bible.
-   */
-  private setSearchFromPct(newScrollValue: number | undefined): void {
-    const books = this.books;
-    if (newScrollValue === undefined || books === undefined) {
-      this.referenceLabel = '';
-      return;
-    }
-    const verseIndex = Math.round((newScrollValue / 100) * (verseCount - 1));
-    let foundBookCode: string;
-    let verseAccum = 0;
-    for (const bookCode of Object.keys(allVerseCounts)) {
-      foundBookCode = bookCode;
-      const chapterCounts = allVerseCounts[bookCode];
-      for (const [index, versesInChapter] of chapterCounts.entries()) {
-        const foundChapter = index + 1;
-        if (verseAccum + versesInChapter > verseIndex) {
-          const book = books[foundBookCode];
-          const verse = verseIndex - verseAccum + 1;
-          this.referenceLabel = `${book?.toc3} ${foundChapter}:${verse}`;
-          this.currentSearch = `${book?.code} ${foundChapter}:${verse}`;
-          this.currentSearchType = 'ref-point';
-          return;
-        }
-        verseAccum += versesInChapter;
-      }
-    }
-    this.referenceLabel = '';
-  }
-
-  /**
-   * Sets currentSearch based on pct within a set of search result sids.
-   * buffer = 40 verses
-   */
-  private async setSearchWithinSidList(
-    newScrollValue: number | undefined
-  ): Promise<void> {
-    if (newScrollValue === undefined || this.sids.length === 0) {
-      this.referenceLabel = '';
-      return;
-    }
-
-    const index = Math.round((this.sids.length - 1) * (newScrollValue / 100));
-    const sid = this.sids[index];
-    this.referenceLabel = this.formatAbbreviatedRefFromSid(sid);
-    this.sidIndex = index; // No need to change currentSearch here.
-    await this.getVersesByRefAndIndexDebounced(this.currentSearch, index);
-  }
-
-  public async moveActiveDownOne(): Promise<void> {
-    if (this.selectInProgress) return;
-
-    if (
-      this.currentSearchType === 'ref-point' &&
-      this.groupingMode === 'paragraph'
-    ) {
-      await this.moveActiveDownOnePara();
-    } else {
-      await this.moveActiveDownOneVerse();
-    }
-  }
-
-  public async moveActiveUpOne(): Promise<void> {
-    if (this.selectInProgress) return;
-
-    if (
-      this.currentSearchType === 'ref-point' &&
-      this.groupingMode === 'paragraph'
-    ) {
-      await this.moveActiveUpOnePara();
-    } else {
-      await this.moveActiveUpOneVerse();
-    }
   }
 
   public autoCompleteUp() {
@@ -412,45 +432,49 @@ export default class BibleTextService {
     }
   }
 
-  private async evaluateSearchInput(searchInput: string): Promise<void> {
+  private evaluateSearchInput(searchInput: string): void {
     if (this.autoCompletePickInProgress) {
-      await this.performSearch();
+      this.performSearch();
       return;
     }
-
     this.autoCompleteOptions = [];
     this.highlightSid = undefined;
-    const searchLower = searchInput.toLowerCase();
     const [_before, after] = splitByLastDelimiter(
-      searchLower,
+      searchInput.toLowerCase(),
       searchDelimiters
     );
-
-    // bring up auto complete
-    if (after.length < 2) {
-      this.currentSearch = defaultSearch;
-      this.currentSearchType = defaultSearchType;
-      // close auto complete
-    } else {
+    if (after.length >= 2) {
       this.addReferenceAutoCompleteOptions(after);
       // TODO: Add word auto complete options.
-
       if (this.autoCompleteOptions.length > 0) {
         this.autoCompleteOptions[0].selected = true;
       }
     }
-
-    await this.performSearch();
+    this.searchDebounced();
   }
 
-  private async performSearch(): Promise<void> {
-    const searchLower = this.searchInput.toLowerCase().trim();
-    if (searchLower.length < 2) return;
-
-    const { searchType, searchString } = parseSearch(searchLower);
-
-    this.currentSearchType = searchType;
-    this.currentSearch = searchString ?? defaultSearch;
+  /**
+   * Shows what the search asks for: an empty search goes back to where the
+   * reader was reading; a place opens chapters there; a range or list shows
+   * its verses; anything else is a word search.
+   */
+  private performSearch(): void {
+    this.lead();
+    const search = this.searchInput.toLowerCase().trim();
+    if (search.length < 2) {
+      if (this.mode !== 'chapters') this.openAt(this.browseSid);
+      return;
+    }
+    const request = parseSearch(search);
+    if (request.searchType === 'point' && request.sid) {
+      this.openAt(request.sid);
+    } else if (request.searchType === 'ref' && request.osis) {
+      if (request.osis !== this.listOsis || this.mode !== 'list') {
+        this.showList(request.osis);
+      }
+    } else {
+      this.showText();
+    }
   }
 
   private addReferenceAutoCompleteOptions(searchInput: string) {
@@ -471,129 +495,6 @@ export default class BibleTextService {
     );
   }
 
-  private async moveActiveDownOnePara(): Promise<void> {
-    const nextParagraph = this.nextParaBuffer[0];
-    if (!nextParagraph) return;
-
-    const { prev, active, next } = await this.moduleDbService.getParagraphs(
-      nextParagraph.id
-    );
-
-    this.prevParaBuffer = prev;
-    this.activePara = active;
-    this.nextParaBuffer = next;
-    const firstVerse = active?.verses[0];
-    if (firstVerse) {
-      this.setScrollPosition(firstVerse);
-    }
-  }
-
-  private async moveActiveUpOnePara(): Promise<void> {
-    const prevParagraph = this.prevParaBuffer[this.prevParaBuffer.length - 1];
-    if (!prevParagraph) return;
-
-    const { prev, active, next } = await this.moduleDbService.getParagraphs(
-      prevParagraph.id
-    );
-
-    this.prevParaBuffer = prev;
-    this.activePara = active;
-    this.nextParaBuffer = next;
-    const firstVerse = active?.verses[0];
-    if (firstVerse) {
-      this.setScrollPosition(firstVerse);
-    }
-  }
-
-  private async moveActiveDownOneVerse(): Promise<void> {
-    const nextVerseNumber = this.nextVerseBuffer?.[0]?.id;
-    if (!nextVerseNumber) return;
-
-    if (this.currentSearchType === 'ref-point') {
-      const { prev, active, next } =
-        await this.moduleDbService.getVerses(nextVerseNumber);
-      this.prevVerseBuffer = prev;
-      this.activeVerse = active;
-      this.nextVerseBuffer = next;
-    } else {
-      if (this.sidIndex < this.sids.length - 1) {
-        this.sidIndex = this.sidIndex + 1;
-        await this.getVersesByRefAndIndex(this.currentSearch, this.sidIndex);
-      }
-    }
-
-    if (this.activeVerse) {
-      this.setScrollPosition(this.activeVerse);
-    }
-  }
-
-  private async moveActiveUpOneVerse(): Promise<void> {
-    const prevVerseNumber =
-      this.prevVerseBuffer?.[this.prevVerseBuffer.length - 1]?.id;
-    if (!prevVerseNumber) return;
-
-    if (this.currentSearchType === 'ref-point') {
-      const { prev, active, next } =
-        await this.moduleDbService.getVerses(prevVerseNumber);
-      this.prevVerseBuffer = prev;
-      this.activeVerse = active;
-      this.nextVerseBuffer = next;
-    } else {
-      if (this.sidIndex > 0) {
-        this.sidIndex = this.sidIndex - 1;
-        await this.getVersesByRefAndIndex(this.currentSearch, this.sidIndex);
-      }
-    }
-
-    if (this.activeVerse) {
-      this.setScrollPosition(this.activeVerse);
-    }
-  }
-
-  private setScrollPosition(verse: Verse): void {
-    this.adjustingScrollPct = true;
-    if (this.currentSearchType === 'ref-point') {
-      this._scrollPct = (verse.id / verseCount) * 100;
-    } else {
-      this._scrollPct = (this.sidIndex / (this.sids.length - 1)) * 100;
-    }
-    this.referenceLabel = this.formatAbbreviatedRefFromSid(verse.sid);
-    setTimeout(() => {
-      this.adjustingScrollPct = false;
-    }, 500);
-  }
-
-  /**
-   * Switches this text to another module, keeping the reader's place:
-   * browsing stays at the verse in view (or the nearest one the new module
-   * has), and a search runs again in the new module.
-   */
-  public async setModule(moduleId: string): Promise<void> {
-    if (moduleId === this.moduleId) return;
-    const sid = this.sidInView;
-    this.moduleId = moduleId;
-    this.moduleDbService = new ModuleDbService(moduleId);
-    this.loadError = undefined;
-    try {
-      await Promise.all([this.getModule(), this.getBooks()]);
-      if (this.currentSearchType === 'ref-point') {
-        const target =
-          (sid ? await this.moduleDbService.nearestSid(sid) : undefined) ??
-          this.currentSearch;
-        if (target === this.currentSearch) {
-          await this.getText(target, 'ref-point');
-        } else {
-          // Watched in the constructor, which loads the text there.
-          this.currentSearch = target;
-        }
-      } else {
-        await this.getText(this.currentSearch, this.currentSearchType);
-      }
-    } catch (err) {
-      this.loadError = err;
-    }
-  }
-
   private async getModule(): Promise<void> {
     const info = await this.moduleDbService.getModuleInfo();
     this.moduleName = info.name;
@@ -603,180 +504,5 @@ export default class BibleTextService {
 
   private async getBooks(): Promise<void> {
     this.books = await this.moduleDbService.getBooks();
-  }
-
-  /**
-   * This is called anytime currentSearch changes, which includes manual scrolling as well scroll bar changes.
-   * @param currentSearch
-   * @param currentSearchType
-   * @private
-   */
-  private async getText(
-    currentSearch: string,
-    currentSearchType: SearchType
-  ): Promise<void> {
-    try {
-      switch (true) {
-        case currentSearchType === 'ref-point' &&
-          this.groupingMode === 'paragraph':
-          await this.getVersesByParagraphs(currentSearch);
-          break;
-        case currentSearchType === 'ref-point' && this.groupingMode === 'verse':
-          await this.getVerses(currentSearch);
-          break;
-        case currentSearchType === 'ref':
-          await this.getVersesByRef(currentSearch);
-          break;
-      }
-      this.loadError = undefined;
-    } catch (err) {
-      this.loadError = err;
-      this.selectInProgress = false;
-    }
-  }
-
-  /**
-   * Search type is ref point with paragraph grouping.
-   * @param currentSearch
-   * @private
-   */
-  private async getVersesByParagraphs(currentSearch: string): Promise<void> {
-    const start = Date.now();
-    this.getTextStart = start;
-    this.selectInProgress = true;
-
-    const { prev, active, next } =
-      await this.moduleDbService.getParagraphsAtSid(currentSearch);
-
-    // Only set results if this is the last call to getText.
-    if (this.getTextStart === start) {
-      this.prevParaBuffer = prev;
-      this.activePara = active;
-      this.nextParaBuffer = next;
-      this.scrollToSid = currentSearch; // Triggers scrollIntoView in paragraph.svelte
-      this.sids = [];
-      this.prevVerseBuffer = [];
-      this.activeVerse = undefined;
-      this.nextVerseBuffer = [];
-    }
-
-    const firstVerse = this.activePara?.verses[0];
-    if (firstVerse) {
-      this.setScrollPosition(firstVerse);
-    }
-
-    setTimeout(() => {
-      this.selectInProgress = false;
-    }, selectInProgressTimeout);
-  }
-
-  /**
-   * Search type is ref point with verse grouping.
-   * @param currentSearch
-   * @private
-   */
-  private async getVerses(currentSearch: string): Promise<void> {
-    const start = Date.now();
-    this.getTextStart = start;
-    this.selectInProgress = true;
-
-    const { prev, active, next } =
-      await this.moduleDbService.getVersesAtSid(currentSearch);
-
-    // Only set results if this is the last call to getText.
-    if (this.getTextStart === start) {
-      this.prevVerseBuffer = prev;
-      this.activeVerse = active;
-      this.nextVerseBuffer = next;
-      this.scrollToSid = currentSearch; // Triggers scrollIntoView in verse.svelte
-      this.sids = [];
-      this.prevParaBuffer = [];
-      this.activePara = undefined;
-      this.nextParaBuffer = [];
-    }
-
-    if (this.activeVerse) {
-      this.setScrollPosition(this.activeVerse);
-    }
-
-    setTimeout(() => {
-      this.selectInProgress = false;
-    }, selectInProgressTimeout);
-  }
-
-  /**
-   * Search type is ref from string search (verse grouping only).
-   * @param currentSearch
-   * @private
-   */
-  private async getVersesByRef(currentSearch: string): Promise<void> {
-    const start = Date.now();
-    this.getTextStart = start;
-    this.selectInProgress = true;
-
-    const sidPromise = this.moduleDbService.getSidsByRef(currentSearch);
-    const versePromise = this.moduleDbService.getVersesByRef(currentSearch);
-    const [sids, verseResults] = await Promise.all([sidPromise, versePromise]);
-
-    const { prev, active, next } = verseResults;
-
-    // Only set results if this is the last call to getText.
-    if (this.getTextStart === start) {
-      this.prevVerseBuffer = prev;
-      this.activeVerse = active;
-      this.nextVerseBuffer = next;
-      this.sids = sids;
-      if (active) {
-        this.scrollToSid = active.sid; // Triggers scrollIntoView in verse.svelte
-      }
-      this.prevParaBuffer = [];
-      this.activePara = undefined;
-      this.nextParaBuffer = [];
-    }
-
-    if (this.activeVerse) {
-      this.setScrollPosition(this.activeVerse);
-    }
-
-    setTimeout(() => {
-      this.selectInProgress = false;
-    }, selectInProgressTimeout);
-  }
-
-  /**
-   * Search type is ref from string search (verse grouping only) and sidIndex has changed.
-   * @param currentSearch
-   * @param sidIndex
-   * @private
-   */
-  private async getVersesByRefAndIndex(
-    currentSearch: string,
-    sidIndex: number
-  ): Promise<void> {
-    const start = Date.now();
-    this.getTextStart = start;
-    this.selectInProgress = true;
-
-    const { prev, active, next } = await this.moduleDbService.getVersesByRef(
-      currentSearch,
-      sidIndex
-    );
-
-    // Only set results if this is the last call to getText.
-    if (this.getTextStart === start) {
-      this.prevVerseBuffer = prev;
-      this.activeVerse = active;
-      this.nextVerseBuffer = next;
-      if (active) {
-        this.scrollToSid = active.sid; // Triggers scrollIntoView in verse.svelte
-      }
-      this.prevParaBuffer = [];
-      this.activePara = undefined;
-      this.nextParaBuffer = [];
-    }
-
-    setTimeout(() => {
-      this.selectInProgress = false;
-    }, selectInProgressTimeout);
   }
 }

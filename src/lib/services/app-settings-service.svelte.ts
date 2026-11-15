@@ -1,6 +1,7 @@
 import { Store } from '@tauri-apps/plugin-store';
 import debounce from '$lib/services/debounce';
-import type { GroupingMode } from '$lib/services/bible-text-service.svelte.js';
+/** How the reading pane groups text: in paragraphs, or verse by verse. */
+export type GroupingMode = 'verse' | 'paragraph';
 
 /** How wide the reading column may grow. */
 export type TextWidth = 'narrow' | 'medium' | 'wide' | 'full';

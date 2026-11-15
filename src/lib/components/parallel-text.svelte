@@ -1,8 +1,10 @@
 <script lang="ts">
   /**
    * A parallel text: another Bible beside the main text, with its own Bible
-   * selector but no search. It opens at the main text's verse and keeps in
-   * step with it as the main text scrolls, verse by verse.
+   * selector but no search. It mirrors the main text: the same place when
+   * the main text reads chapters, the same verses when it shows a list, and
+   * the two keep in step by the verse at the top, whichever one the reader
+   * scrolls: the text moved last leads (`leadAt`), and the other follows.
    * A footnote clicked here opens this module's Notes tab.
    */
   import { untrack } from 'svelte';
@@ -32,28 +34,46 @@
   let service = $state<BibleTextService | undefined>();
   let element = $state<HTMLElement>();
 
-  // Keep in step with the main text: whenever the verse at its top
-  // changes, put the same verse (or the nearest this Bible has) at the top
-  // here. If this text was still loading, try once more when it's done, so
-  // a jump in the main text (a new search, a cleared search) is caught. One
-  // way only: the reader can still scroll this text by itself until the
-  // main text moves again.
-  let aligned: string | undefined;
-  let retried: string | undefined;
+  // Mirror the main text's mode: its list, or chapters at its place.
+  // Opening beside a list, start at the main text's verse; after that, a
+  // new list starts at its top, like the main text (whose top verse is
+  // still the old one while its new list loads).
+  let opening = true;
+  $effect(() => {
+    const mode = main?.mode;
+    const osis = main?.listOsis;
+    if (!service || !main) return;
+    untrack(() => {
+      if (!service || !main) return;
+      if (mode === 'list' && osis) {
+        if (service.mode !== 'list' || service.listOsis !== osis) {
+          service.showList(osis, opening ? main.topSid : undefined);
+        }
+      } else if (mode === 'chapters' && service.mode !== 'chapters') {
+        service.openAt(main.topSid ?? main.browseSid);
+      } else if (mode === 'text' && service.mode !== 'text') {
+        service.showText();
+      }
+      opening = false;
+    });
+  });
+
+  // Keep in step: the text the reader moved last brings its top verse to
+  // the top of the other. The main text leads until this one is scrolled.
   $effect(() => {
     const sid = main?.topSid;
-    const loading = service?.selectInProgress ?? true;
-    if (!sid || !service) return;
+    if (!sid || !service || !main) return;
     untrack(() => {
-      if (!service) return;
-      if (sid !== aligned) {
-        aligned = sid;
-        retried = undefined;
-        service.alignSid = sid;
-      } else if (!loading && service.topSid !== sid && retried !== sid) {
-        retried = sid;
-        service.alignSid = sid;
-      }
+      if (!service || !main || main.leadAt < service.leadAt) return;
+      if (service.topSid !== sid) service.align(sid);
+    });
+  });
+  $effect(() => {
+    const sid = service?.topSid;
+    if (!sid || !service || !main) return;
+    untrack(() => {
+      if (!service || !main || service.leadAt <= main.leadAt) return;
+      if (main.topSid !== sid) main.align(sid);
     });
   });
 

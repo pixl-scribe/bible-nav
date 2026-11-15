@@ -17,9 +17,7 @@ use tauri::State;
 
 use super::db::ModuleDb;
 use super::error::{ModuleError, Result};
-use super::queries::{
-    self, Book, IndexedVerse, ModuleInfo, ParagraphWindow, RefRange, VerseRow, VerseWindow,
-};
+use super::queries::{self, Book, IndexedVerse, ModuleInfo, RefRange, VerseRow};
 
 /// The modules currently open, by id (such as "eng_kjv").
 ///
@@ -97,68 +95,6 @@ pub async fn books(registry: State<'_, ModuleRegistry>, module_id: String) -> Re
     run(&registry, &module_id, queries::books).await
 }
 
-/// The paragraphs around paragraph `center`.
-#[tauri::command]
-pub async fn paragraph_window(
-    registry: State<'_, ModuleRegistry>,
-    module_id: String,
-    center: i64,
-    before: u32,
-    after: u32,
-) -> Result<ParagraphWindow> {
-    run(&registry, &module_id, move |conn| {
-        queries::paragraph_window(conn, center, before, after)
-    })
-    .await
-}
-
-/// The paragraphs around the one holding verse `sid`, in a single call.
-#[tauri::command]
-pub async fn paragraph_window_at_sid(
-    registry: State<'_, ModuleRegistry>,
-    module_id: String,
-    sid: String,
-    before: u32,
-    after: u32,
-) -> Result<ParagraphWindow> {
-    run(&registry, &module_id, move |conn| {
-        let center = queries::paragraph_for_sid(conn, &sid)?;
-        queries::paragraph_window(conn, center, before, after)
-    })
-    .await
-}
-
-/// The verses around verse id `center`.
-#[tauri::command]
-pub async fn verse_window(
-    registry: State<'_, ModuleRegistry>,
-    module_id: String,
-    center: i64,
-    before: u32,
-    after: u32,
-) -> Result<VerseWindow> {
-    run(&registry, &module_id, move |conn| {
-        queries::verse_window(conn, center, before, after)
-    })
-    .await
-}
-
-/// The verses around verse `sid`, in a single call.
-#[tauri::command]
-pub async fn verse_window_at_sid(
-    registry: State<'_, ModuleRegistry>,
-    module_id: String,
-    sid: String,
-    before: u32,
-    after: u32,
-) -> Result<VerseWindow> {
-    run(&registry, &module_id, move |conn| {
-        let center = queries::verse_id_for_sid(conn, &sid)?;
-        queries::verse_window(conn, center, before, after)
-    })
-    .await
-}
-
 /// The sids of every verse in the reference ranges.
 #[tauri::command]
 pub async fn ref_sids(
@@ -183,6 +119,22 @@ pub async fn ref_verses(
 ) -> Result<Vec<IndexedVerse>> {
     run(&registry, &module_id, move |conn| {
         queries::ref_verses(conn, &ranges, offset, limit)
+    })
+    .await
+}
+
+/// One whole chapter for infinite scrolling: the chapter holding `sid`, or
+/// `offset` chapters after (positive) or before (negative) it. `None` past
+/// either end of the module.
+#[tauri::command]
+pub async fn chapter_at(
+    registry: State<'_, ModuleRegistry>,
+    module_id: String,
+    sid: String,
+    offset: i32,
+) -> Result<Option<queries::ChapterText>> {
+    run(&registry, &module_id, move |conn| {
+        queries::chapter_at(conn, &sid, offset)
     })
     .await
 }
