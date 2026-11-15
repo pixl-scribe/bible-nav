@@ -13,6 +13,10 @@ export interface ModuleSummary {
   name: string;
   /** The short name for tabs and menus, such as "KJV". */
   abbreviation: string;
+  /** "bible", "dictionary", and so on: which menus list it. */
+  moduleType: string;
+  /** Whether it has footnotes, so a Notes tab can be offered. */
+  hasNotes: boolean;
   version: string;
   file: string;
   /** From the module itself, which its signed file hash covers. */

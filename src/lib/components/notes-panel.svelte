@@ -11,6 +11,7 @@
   import type BibleTextService from '$lib/services/bible-text-service.svelte';
   import { chapterOf, type NotesTab } from '$lib/services/parallel-pane.svelte';
   import { noteText } from '$lib/services/verse-content';
+  import ModuleDbService from '$lib/services/module-db-service.svelte';
 
   let {
     tab,
@@ -19,7 +20,7 @@
     onFocusNote,
   }: {
     tab: NotesTab;
-    /** The main pane's text, which these notes belong to. */
+    /** The main pane's text, which the notes' headings take the reader to. */
     service: BibleTextService;
     textMaxWidth: string;
     onFocusNote: (letter: string) => void;
@@ -30,9 +31,11 @@
   let error = $state<unknown>();
   let list = $state<HTMLElement>();
 
-  const chapter = $derived(chapterOf(tab.sid));
+  /** The notes come from the tab's own module, which may not be the main text's. */
+  const notesDb = $derived(new ModuleDbService(tab.moduleId));
+  const chapter = $derived(`${tab.moduleId} ${chapterOf(tab.sid)}`);
   const chapterName = $derived(
-    service.formatChapterFromSid(tab.sid) || chapter
+    service.formatChapterFromSid(tab.sid) || chapterOf(tab.sid)
   );
 
   // Load the chapter's notes whenever the tab moves to another chapter.
@@ -42,11 +45,11 @@
     untrack(() => {
       if (wanted === loadedChapter) return;
       error = undefined;
-      service
+      notesDb
         .getChapterNotes(sid)
         .then((found) => {
           // Ignore an answer for a chapter the tab has already left.
-          if (chapterOf(tab.sid) !== wanted) return;
+          if (`${tab.moduleId} ${chapterOf(tab.sid)}` !== wanted) return;
           notes = found;
           loadedChapter = wanted;
         })

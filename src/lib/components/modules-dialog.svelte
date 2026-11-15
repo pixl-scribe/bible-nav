@@ -8,13 +8,17 @@
   import { _ } from 'svelte-i18n';
   import ModulesInstalled from './modules-installed.svelte';
   import ModulesDownload from './modules-download.svelte';
+  import {
+    modulesDialogService,
+    type ModulesTab,
+  } from '$lib/services/modules-dialog-service.svelte';
 
   let { dialog = $bindable() }: { dialog: HTMLDialogElement | undefined } =
     $props();
 
-  type Tab = 'installed' | 'download';
-  const tabs: Tab[] = ['installed', 'download'];
-  let selected = $state<Tab>('installed');
+  const tabs: ModulesTab[] = ['installed', 'download'];
+  // The tab to show; "Get more modules…" opens the dialog on Download.
+  const selected = $derived(modulesDialogService.tab);
 </script>
 
 <dialog bind:this={dialog} class="modal" aria-labelledby="modules-title">
@@ -43,7 +47,7 @@
           aria-selected={selected === tab}
           aria-controls="modules-panel-{tab}"
           class="btn btn-sm {selected === tab ? 'btn-primary' : 'btn-ghost'}"
-          onclick={() => (selected = tab)}
+          onclick={() => (modulesDialogService.tab = tab)}
         >
           {$_(`modules.tab.${tab}`)}
         </button>

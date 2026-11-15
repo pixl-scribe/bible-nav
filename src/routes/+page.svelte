@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Plus, X } from '@lucide/svelte';
+  import { ChevronDown, Plus, X } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import { themeService } from '$lib/services/theme-service.svelte.js';
   import LeftNav from '$lib/components/left-nav.svelte';
@@ -7,12 +7,44 @@
   import SearchView from '$lib/components/search-view.svelte';
   import ModulesFolderNotice from '$lib/components/modules-folder-notice.svelte';
   import { SearchTabs } from '$lib/services/search-tabs.svelte';
+  import { moduleFolderService } from '$lib/services/module-folder-service.svelte';
+  import ModuleMenu, {
+    type MenuSection,
+  } from '$lib/components/module-menu.svelte';
 
   /** The text a new search reads. */
   const defaultModuleId = 'eng_kjv';
   const searches = new SearchTabs(defaultModuleId);
 
   const label = (text: string) => text || $_('search-tabs.new');
+
+  const modules = $derived(moduleFolderService.status?.modules ?? []);
+  const abbreviationOf = (moduleId: string) =>
+    modules.find((module) => module.id === moduleId)?.abbreviation ?? '';
+
+  /** The module a plain + opens: the last tab's, as SearchTabs.add does. */
+  const nextModuleId = $derived(
+    searches.tabs[searches.tabs.length - 1]?.moduleId ?? defaultModuleId
+  );
+
+  let newSearchMenuOpen = $state(false);
+  const newSearchSections = $derived<MenuSection[]>([
+    {
+      heading: $_('module-menu.new-search-in'),
+      items: modules
+        .filter((module) => module.moduleType === 'bible')
+        .map((module) => ({
+          key: module.id,
+          abbreviation: module.abbreviation,
+          name: module.name,
+          detail:
+            module.id === nextModuleId
+              ? $_('module-menu.same-as-now')
+              : undefined,
+          pick: () => searches.add(module.id),
+        })),
+    },
+  ]);
 
   onMount(async () => {
     await themeService.loadTheme();
@@ -47,7 +79,11 @@
             aria-selected={selected}
             aria-controls="search-panel-{tab.id}"
             class="h-full max-w-56 cursor-pointer truncate pr-1 pl-3.5"
-            onclick={() => searches.select(tab.id)}>{label(tab.label)}</button
+            onclick={() => searches.select(tab.id)}
+            >{label(tab.label)}{#if abbreviationOf(tab.moduleId)}<span
+                class="ml-2 rounded bg-base-content/10 px-1.5 py-0.5 text-[0.6875rem]"
+                >{abbreviationOf(tab.moduleId)}</span
+              >{/if}</button
           >
           <button
             type="button"
@@ -61,15 +97,42 @@
           </button>
         </div>
       {/each}
-      <button
-        type="button"
-        class="btn btn-soft btn-primary btn-sm btn-square mb-0.5 ml-1"
-        aria-label={$_('main.new-search')}
-        title={$_('main.new-search')}
-        onclick={() => searches.add()}
-      >
-        <Plus size={18} />
-      </button>
+      <div class="join relative mb-0.5 ml-1">
+        <button
+          type="button"
+          class="btn btn-soft btn-primary btn-sm btn-square join-item"
+          aria-label={$_('main.new-search-in', {
+            values: { abbr: abbreviationOf(nextModuleId) },
+          })}
+          title={$_('main.new-search-in', {
+            values: { abbr: abbreviationOf(nextModuleId) },
+          })}
+          onclick={() => searches.add()}
+        >
+          <Plus size={18} />
+        </button>
+        <button
+          type="button"
+          class="btn btn-soft btn-primary btn-sm join-item w-6 px-0"
+          aria-label={$_('main.new-search-choose')}
+          aria-haspopup="menu"
+          aria-expanded={newSearchMenuOpen}
+          onclick={(event) => {
+            event.stopPropagation();
+            newSearchMenuOpen = !newSearchMenuOpen;
+          }}
+        >
+          <ChevronDown size={14} />
+        </button>
+        {#if newSearchMenuOpen}
+          <ModuleMenu
+            sections={newSearchSections}
+            label={$_('module-menu.new-search-in')}
+            class="top-9 left-0"
+            onclose={() => (newSearchMenuOpen = false)}
+          />
+        {/if}
+      </div>
     </div>
     <div
       class={[
@@ -83,6 +146,8 @@
           hidden={tab.id !== searches.activeId}
           id="search-panel-{tab.id}"
           labelledBy="search-tab-{tab.id}"
+          onLabel={(text) => searches.setLabel(tab.id, text)}
+          onModuleChange={(moduleId) => searches.setModule(tab.id, moduleId)}
         />
       {/each}
     </div>

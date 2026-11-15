@@ -29,7 +29,7 @@
 
 <!-- The verse's id is on this wrapper, so going to a verse shows the
      headings before it, such as a Psalm title, instead of scrolling past. -->
-<div id={verse.sid}>
+<div id={verse.sid} data-sid={verse.sid}>
   {#each verse.headingsBefore as heading (heading.id)}
     <HeadingText {heading} />
   {/each}

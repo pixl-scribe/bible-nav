@@ -4,10 +4,10 @@
   import Settings from './settings.svelte';
   import AboutDialog from './about-dialog.svelte';
   import ModulesDialog from './modules-dialog.svelte';
+  import { modulesDialogService } from '$lib/services/modules-dialog-service.svelte';
 
   let isSettingsOpen = $state(false);
   let aboutDialogRef = $state<HTMLDialogElement>();
-  let modulesDialogRef = $state<HTMLDialogElement>();
 
   function openSettingsDrawer() {
     isSettingsOpen = true;
@@ -24,7 +24,7 @@
     <a
       class="btn btn-soft btn-primary tooltip tooltip-right"
       data-tip={$_('left-nav.modules')}
-      onclick={() => modulesDialogRef?.showModal()}
+      onclick={() => modulesDialogService.open()}
     >
       <LibraryBig />
     </a>
@@ -69,4 +69,4 @@
 </div>
 
 <AboutDialog bind:dialog={aboutDialogRef} />
-<ModulesDialog bind:dialog={modulesDialogRef} />
+<ModulesDialog bind:dialog={modulesDialogService.dialog} />

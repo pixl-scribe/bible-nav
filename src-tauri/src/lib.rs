@@ -23,6 +23,7 @@ pub fn run() {
             modules::commands::ref_sids,
             modules::commands::ref_verses,
             modules::commands::chapter_notes,
+            modules::commands::nearest_sid,
             modules::folder::modules_folder_status,
             modules::folder::dismiss_modules_folder_notice,
             modules::folder::pick_modules_folder,

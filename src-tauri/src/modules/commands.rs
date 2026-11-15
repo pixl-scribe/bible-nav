@@ -187,6 +187,20 @@ pub async fn ref_verses(
     .await
 }
 
+/// The verse to show for `sid` in this module, when the reader switches
+/// Bibles: `sid`, or the nearest verse the module has.
+#[tauri::command]
+pub async fn nearest_sid(
+    registry: State<'_, ModuleRegistry>,
+    module_id: String,
+    sid: String,
+) -> Result<Option<String>> {
+    run(&registry, &module_id, move |conn| {
+        queries::nearest_sid(conn, &sid)
+    })
+    .await
+}
+
 /// The verses with footnotes in the chapter holding verse `sid`.
 #[tauri::command]
 pub async fn chapter_notes(

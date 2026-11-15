@@ -42,6 +42,7 @@
   <p class="{className} {poetry ? 'my-0.5 pl-10 -indent-6' : 'my-2'}">
     {#each paragraph.verses as verse, i (verse.sid)}
       <span
+        data-sid={verse.sid}
         class={[
           'rounded-sm box-decoration-clone',
           bibleTextService?.highlightSid === verse.sid && 'pair-highlight',

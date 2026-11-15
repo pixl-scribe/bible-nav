@@ -413,6 +413,8 @@ mod tests {
             id: "eng_kjv".into(),
             name: "King James Version (1769)".into(),
             abbreviation: "KJV".into(),
+            module_type: "bible".into(),
+            has_notes: true,
             version: version.into(),
             file: format!("eng_kjv-{version}.db"),
             description: String::new(),

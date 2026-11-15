@@ -543,6 +543,40 @@ pub fn ref_verses(
 /// The verses with footnotes in the chapter that holds verse `sid`, in
 /// reading order, each with its `note_start` so the page letters the notes
 /// exactly as the reading text does. This is what the Notes tab lists.
+/// The verse to show for `sid` in this module: `sid` itself, or, if the
+/// module lacks it, the nearest verse in the same chapter, else the
+/// nearest chapter of the same book. `None` if the book isn't there. Used
+/// when a reader switches Bibles, which may number verses differently.
+pub fn nearest_sid(conn: &Connection, sid: &str) -> Result<Option<String>> {
+    let Some((book, place)) = sid.split_once(' ') else {
+        return Ok(None);
+    };
+    let (chapter, verse) = place.split_once(':').unwrap_or((place, "1"));
+    let (Ok(chapter), Ok(verse)) = (chapter.parse::<i64>(), verse.parse::<i64>()) else {
+        return Ok(None);
+    };
+    let found = conn
+        .query_row(
+            "SELECT v.sid FROM verses v JOIN books b ON b.id = v.bookId
+             WHERE b.code = ?1
+             ORDER BY abs(v.chapter - ?2), abs(v.nbr - ?3), v.nbr
+             LIMIT 1",
+            rusqlite::params![book, chapter, verse],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(found)
+}
+
+/// Whether any verse has a footnote, for listing the module's Notes tab.
+pub fn has_notes(conn: &Connection) -> Result<bool> {
+    Ok(conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM verses WHERE instr(children, '\"style\":\"f\"') > 0)",
+        [],
+        |row| row.get(0),
+    )?)
+}
+
 pub fn chapter_notes(conn: &Connection, sid: &str) -> Result<Vec<VerseRow>> {
     let (book_id, chapter): (i64, i64) = conn
         .query_row(
@@ -567,6 +601,34 @@ pub fn chapter_notes(conn: &Connection, sid: &str) -> Result<Vec<VerseRow>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_nearest_verse_stands_in_for_a_missing_one() {
+        let db = crate::modules::test_support::kjv();
+        let conn = db.conn();
+        assert_eq!(
+            nearest_sid(conn, "JHN 3:16").unwrap().as_deref(),
+            Some("JHN 3:16")
+        );
+        // 3 John has 14 verses in the KJV.
+        assert_eq!(
+            nearest_sid(conn, "3JN 1:15").unwrap().as_deref(),
+            Some("3JN 1:14")
+        );
+        // Malachi has 4 chapters; a Hebrew "MAL 5" is nearest MAL 4.
+        assert_eq!(
+            nearest_sid(conn, "MAL 5:1").unwrap().as_deref(),
+            Some("MAL 4:1")
+        );
+        assert_eq!(nearest_sid(conn, "XYZ 1:1").unwrap(), None);
+        assert_eq!(nearest_sid(conn, "nonsense").unwrap(), None);
+    }
+
+    #[test]
+    fn the_kjv_has_notes() {
+        let db = crate::modules::test_support::kjv();
+        assert!(has_notes(db.conn()).unwrap());
+    }
 
     #[test]
     fn guesses_an_abbreviation_from_capital_initials() {

@@ -4,6 +4,7 @@
    * searches stay mounted, so switching tabs keeps each one's place.
    */
   import { untrack } from 'svelte';
+  import { _ } from 'svelte-i18n';
   import BibleTextService from '$lib/services/bible-text-service.svelte';
   import { chapterOf } from '$lib/services/parallel-pane.svelte';
   import type { SearchTab } from '$lib/services/search-tabs.svelte';
@@ -19,8 +20,14 @@
     hidden,
     id,
     labelledBy,
+    onLabel,
+    onModuleChange,
   }: {
     tab: SearchTab;
+    /** The search's label changed: what the reader typed. */
+    onLabel: (label: string) => void;
+    /** The reader picked another Bible for this search. */
+    onModuleChange: (moduleId: string) => void;
     hidden: boolean;
     /** The tab panel's id, named by its search tab. */
     id: string;
@@ -32,7 +39,7 @@
 
   // The search tab shows what was typed.
   $effect(() => {
-    tab.label = service?.searchInput.trim() ?? '';
+    onLabel(service?.searchInput.trim() ?? '');
   });
 
   // The chapter at the top of the main pane. As a $derived, it only signals
@@ -41,12 +48,12 @@
     service?.sidInView ? chapterOf(service.sidInView) : undefined
   );
 
-  // The Notes tab follows the chapter in view.
+  // The Notes tabs follow the chapter in view.
   $effect(() => {
     if (!chapterInView) return;
     untrack(() => {
       const sid = service?.sidInView;
-      if (service && sid) tab.parallel.followChapter(service.moduleId, sid);
+      if (sid) tab.parallel.followChapter(sid);
     });
   });
 
@@ -76,6 +83,8 @@
   <BibleText
     moduleId={tab.moduleId}
     bind:service
+    selectorLabel={$_('module-menu.for-search')}
+    {onModuleChange}
     parallelOpen={tab.parallel.open}
     onToggleParallel={() => tab.parallel.toggle()}
   />

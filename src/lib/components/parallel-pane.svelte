@@ -2,14 +2,15 @@
   /**
    * A search's parallel pane: box tabs separated by short vertical rules (no
    * tray; the selected tab is a filled box with bold text), a + menu to add
-   * tabs, and the selected tab's content. Today the only tab is the text's
-   * Notes tab; parallel texts come later.
+   * tabs, and the selected tab's content. Tabs are parallel texts (another
+   * Bible, following the main text) and modules' Notes tabs.
    */
   import { Plus, X } from '@lucide/svelte';
   import { _ } from 'svelte-i18n';
   import type BibleTextService from '$lib/services/bible-text-service.svelte';
   import {
     notesTabKey,
+    textTabKey,
     type ParallelPane,
     type ParallelTab,
   } from '$lib/services/parallel-pane.svelte';
@@ -17,7 +18,10 @@
     appSettingsService,
     textMaxWidths,
   } from '$lib/services/app-settings-service.svelte';
+  import { moduleFolderService } from '$lib/services/module-folder-service.svelte';
   import NotesPanel from './notes-panel.svelte';
+  import ParallelText from './parallel-text.svelte';
+  import ModuleMenu, { type MenuSection } from './module-menu.svelte';
 
   let {
     pane,
@@ -30,35 +34,59 @@
 
   let menuOpen = $state(false);
   const textMaxWidth = $derived(textMaxWidths[appSettingsService.textWidth]);
+  const modules = $derived(moduleFolderService.status?.modules ?? []);
 
-  const notesTitle = $derived(
-    $_('notes.tab', { values: { abbr: service?.moduleAbbreviation ?? '' } })
-  );
+  function abbreviationOf(moduleId: string): string {
+    return (
+      modules.find((module) => module.id === moduleId)?.abbreviation ?? moduleId
+    );
+  }
 
   function title(tab: ParallelTab): string {
-    return tab.kind === 'notes' ? notesTitle : '';
+    const abbr = abbreviationOf(tab.moduleId);
+    return tab.kind === 'notes' ? $_('notes.tab', { values: { abbr } }) : abbr;
   }
 
-  /** Tabs that can be added: the text's Notes tab, if it isn't open. */
-  const addOptions = $derived.by(() => {
-    if (!service) return [];
-    const key = notesTabKey(service.moduleId);
-    if (pane.tabs.some((tab) => tab.key === key)) return [];
-    return [
-      {
-        title: notesTitle,
-        hint: $_('notes.hint'),
-        add: () => {
-          const sid = service?.sidInView;
-          if (service && sid) pane.openNotes(service.moduleId, sid);
-        },
-      },
-    ];
-  });
+  const isOpen = (key: string) => pane.tabs.some((tab) => tab.key === key);
+  const openDetail = (key: string) =>
+    isOpen(key) ? $_('module-menu.open') : undefined;
 
-  function onMenuKey(event: KeyboardEvent) {
-    if (event.key === 'Escape') menuOpen = false;
-  }
+  /**
+   * The + menu: every Bible as a parallel text, then every module with
+   * notes. One already open says so, and picking it selects its tab.
+   */
+  const sections = $derived<MenuSection[]>([
+    {
+      heading: $_('module-menu.parallel-text'),
+      items: modules
+        .filter((module) => module.moduleType === 'bible')
+        .map((module) => ({
+          key: textTabKey(module.id),
+          abbreviation: module.abbreviation,
+          name: module.name,
+          detail: openDetail(textTabKey(module.id)),
+          pick: () => {
+            const sid = service?.sidInView;
+            if (sid) pane.openText(module.id, sid);
+          },
+        })),
+    },
+    {
+      heading: $_('module-menu.notes'),
+      items: modules
+        .filter((module) => module.hasNotes)
+        .map((module) => ({
+          key: notesTabKey(module.id),
+          abbreviation: module.abbreviation,
+          name: $_('notes.tab', { values: { abbr: module.abbreviation } }),
+          detail: openDetail(notesTabKey(module.id)),
+          pick: () => {
+            const sid = service?.sidInView;
+            if (sid) pane.openNotes(module.id, sid);
+          },
+        })),
+    },
+  ]);
 </script>
 
 <section
@@ -100,44 +128,37 @@
       type="button"
       class="btn btn-soft btn-primary btn-sm btn-square"
       aria-label={$_('parallel.add')}
+      aria-haspopup="menu"
       aria-expanded={menuOpen}
-      onclick={() => (menuOpen = !menuOpen)}
-      onkeydown={onMenuKey}
+      onclick={(event) => {
+        event.stopPropagation();
+        menuOpen = !menuOpen;
+      }}
     >
       <Plus size={16} />
     </button>
     {#if menuOpen}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="absolute top-11 left-2 z-20 flex min-w-56 flex-col gap-0.5 rounded-box border border-base-content/15 bg-base-100 p-1.5 shadow-lg"
-        onkeydown={onMenuKey}
-      >
-        {#each addOptions as option (option.title)}
-          <button
-            type="button"
-            class="btn btn-ghost h-auto justify-start py-2 text-left font-normal"
-            onclick={() => {
-              option.add();
-              menuOpen = false;
-            }}
-          >
-            <span>
-              {option.title}
-              <span class="block text-xs text-base-content/60"
-                >{option.hint}</span
-              >
-            </span>
-          </button>
-        {:else}
-          <p class="m-2 text-sm text-base-content/60">
-            {$_('parallel.all-open')}
-          </p>
-        {/each}
-      </div>
+      <ModuleMenu
+        {sections}
+        label={$_('parallel.add')}
+        class="top-11 left-2"
+        onclose={() => (menuOpen = false)}
+      />
     {/if}
   </div>
 
-  {#if pane.active?.kind === 'notes' && service}
+  {#each pane.tabs as tab (tab.kind === 'text' ? tab.uid : tab.key)}
+    {#if tab.kind === 'text'}
+      <div
+        class={['flex min-h-0 flex-1', tab.key !== pane.activeKey && 'hidden']}
+      >
+        <ParallelText {tab} {pane} main={service} />
+      </div>
+    {/if}
+  {/each}
+  {#if pane.active?.kind === 'text'}
+    <!-- Shown above, kept loaded so each keeps its place. -->
+  {:else if pane.active?.kind === 'notes' && service}
     <NotesPanel
       tab={pane.active}
       {service}

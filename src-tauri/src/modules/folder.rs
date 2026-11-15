@@ -41,6 +41,10 @@ pub struct ModuleSummary {
     pub name: String,
     /// The short name for tabs and menus, such as "KJV".
     pub abbreviation: String,
+    /// "bible", "dictionary", and so on: which menus list it.
+    pub module_type: String,
+    /// Whether it has footnotes, so a Notes tab can be offered.
+    pub has_notes: bool,
     pub version: String,
     pub file: String,
     /// From the module itself, so covered by its signed file hash.
@@ -258,6 +262,8 @@ pub(crate) fn load_folder<R: Runtime>(
                         id: module.id,
                         name: module.name,
                         abbreviation: module.abbreviation,
+                        module_type: module.module_type,
+                        has_notes: module.has_notes,
                         version: module.version,
                         description: module.description,
                         language: module.language,

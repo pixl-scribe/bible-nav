@@ -100,6 +100,10 @@ pub struct FoundModule {
     pub version: String,
     pub name: String,
     pub abbreviation: String,
+    /// "bible", "dictionary", and so on.
+    pub module_type: String,
+    /// Whether any verse has a footnote.
+    pub has_notes: bool,
     pub path: PathBuf,
     pub description: String,
     pub language: String,
@@ -323,6 +327,8 @@ pub fn scan_all(folder: &Path) -> Result<Scanned> {
                 version: info.version,
                 name: info.name,
                 abbreviation: info.abbreviation,
+                module_type: info.module_type,
+                has_notes: has_notes_cached(&path, db.conn())?,
                 path: path.clone(),
                 description: info.description,
                 language: info.language,
@@ -347,6 +353,28 @@ pub fn scan_all(folder: &Path) -> Result<Scanned> {
         scanned.older.extend(versions);
     }
     Ok(scanned)
+}
+
+/// Whether a module has footnotes, remembered for the rest of the run by
+/// path, size, and modification time: the folder is scanned again whenever
+/// the window regains focus, and a module without notes takes a full pass
+/// to answer.
+fn has_notes_cached(path: &Path, conn: &rusqlite::Connection) -> Result<bool> {
+    type Cache = std::collections::HashMap<PathBuf, (u64, Option<std::time::SystemTime>, bool)>;
+    static CACHE: std::sync::OnceLock<std::sync::Mutex<Cache>> = std::sync::OnceLock::new();
+    let cache = CACHE.get_or_init(Default::default);
+    let metadata = fs::metadata(path)?;
+    let stamp = (metadata.len(), metadata.modified().ok());
+    if let Some(&(size, modified, has)) = cache.lock().ok().as_ref().and_then(|map| map.get(path)) {
+        if (size, modified) == stamp {
+            return Ok(has);
+        }
+    }
+    let has = queries::has_notes(conn)?;
+    if let Ok(mut map) = cache.lock() {
+        map.insert(path.to_path_buf(), (stamp.0, stamp.1, has));
+    }
+    Ok(has)
 }
 
 /// The `.db` files directly in a folder, ignoring hidden files, sorted by name.

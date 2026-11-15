@@ -26,17 +26,36 @@ export class SearchTabs {
     return this.tabs.findIndex((tab) => tab.id === this.activeId);
   }
 
-  /** Opens a new, empty search and shows it. */
-  public add(): SearchTab {
+  /**
+   * Opens a new, empty search and shows it, in `moduleId`, or by default in
+   * the module of the tab nearest the + button (the last one): most new
+   * searches stay in the same Bible.
+   */
+  public add(moduleId?: string): SearchTab {
     const tab: SearchTab = {
       id: this.nextId++,
-      moduleId: this.defaultModuleId,
+      moduleId:
+        moduleId ??
+        this.tabs[this.tabs.length - 1]?.moduleId ??
+        this.defaultModuleId,
       label: '',
       parallel: new ParallelPane(),
     };
     this.tabs.push(tab);
     this.activeId = tab.id;
     return tab;
+  }
+
+  /** Sets what a search's tab shows: what the reader typed. */
+  public setLabel(id: number, label: string): void {
+    const tab = this.tabs.find((t) => t.id === id);
+    if (tab && tab.label !== label) tab.label = label;
+  }
+
+  /** Switches a search to another module, from its Bible selector. */
+  public setModule(id: number, moduleId: string): void {
+    const tab = this.tabs.find((t) => t.id === id);
+    if (tab) tab.moduleId = moduleId;
   }
 
   public select(id: number): void {

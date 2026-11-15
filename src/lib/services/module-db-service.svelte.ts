@@ -100,6 +100,19 @@ export default class ModuleDbService {
     };
   }
 
+  /**
+   * The verse to show for `sid` in this module: `sid`, or the nearest
+   * verse the module has, or undefined if it lacks the book.
+   */
+  public async nearestSid(sid: string): Promise<string | undefined> {
+    return (
+      (await invoke<string | null>('nearest_sid', {
+        moduleId: this.moduleId,
+        sid,
+      })) ?? undefined
+    );
+  }
+
   public async getBooks(): Promise<Record<string, Book>> {
     const books = await invoke<Book[]>('books', { moduleId: this.moduleId });
     return Object.fromEntries(books.map((book) => [book.code, book]));

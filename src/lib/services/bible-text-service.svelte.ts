@@ -68,13 +68,38 @@ export default class BibleTextService {
   public highlightSid = $state<string | undefined>();
   /** A verse the pane should bring into view (see bible-text.svelte). */
   public revealSid = $state<string | undefined>();
+  /**
+   * The verse at the top of the pane, updated as the reader scrolls (see
+   * bible-text.svelte). Parallel texts follow it.
+   */
+  public topSid = $state<string | undefined>();
+  /**
+   * A verse the pane should put at its top at once, without highlighting
+   * it: a parallel text keeping in step with the main text.
+   */
+  public alignSid = $state<string | undefined>();
+  /**
+   * A verse to put at the top once the text being loaded is in place: set
+   * when aligning needed a load first.
+   */
+  public alignAfterLoad = $state<string | undefined>();
   public referenceLabel = $state<string>('');
   public autoCompletePickInProgress = $state<boolean>(false);
   /** A problem loading text, such as a missing module, to show the reader. */
   /** The last load's error, for `errorMessage` to describe. */
   public loadError = $state<unknown>(undefined);
 
-  constructor(public readonly moduleId: string) {
+  /** The module this text reads; `setModule` switches it. */
+  public moduleId = $state<string>('');
+
+  /**
+   * @param moduleId the module to read.
+   * @param startSid a verse to start at, such as the main text's place
+   *   when a parallel text opens; otherwise the default start.
+   */
+  constructor(moduleId: string, startSid?: string) {
+    this.moduleId = moduleId;
+    if (startSid) this.currentSearch = startSid;
     this.moduleDbService = new ModuleDbService(moduleId);
     this.getModule().catch((err) => (this.loadError = err));
     this.getBooks().catch((err) => (this.loadError = err));
@@ -181,6 +206,20 @@ export default class BibleTextService {
    * Takes the reader to verse `sid` and highlights it. The pane scrolls to it
    * if it's loaded, or loads the text there (see bible-text.svelte).
    */
+  /**
+   * Shows the verse `sid`, or the nearest verse this module has, for a
+   * parallel text following the main text. Does nothing if the module
+   * lacks the book.
+   */
+  public async goToNearest(sid: string): Promise<void> {
+    try {
+      const target = await this.moduleDbService.nearestSid(sid);
+      if (target) this.goToSid(target);
+    } catch (err) {
+      this.loadError = err;
+    }
+  }
+
   public goToSid(sid: string): void {
     this.highlightSid = sid;
     this.revealSid = sid;
@@ -192,6 +231,31 @@ export default class BibleTextService {
   }
 
   /** Loads the text at verse `sid`, which then scrolls into view. */
+  /**
+   * Loads the text at `sid`, or at the nearest verse this module has, for a
+   * parallel text whose verse isn't loaded yet.
+   */
+  public async loadNearest(sid: string): Promise<void> {
+    try {
+      const target = await this.moduleDbService.nearestSid(sid);
+      if (!target) return;
+      this.alignAfterLoad = target;
+      if (
+        target === this.currentSearch &&
+        this.currentSearchType === 'ref-point'
+      ) {
+        // Already the search, so watching it won't load it: load directly.
+        this.selectInProgress = true;
+        await this.getText(target, 'ref-point');
+        this.selectInProgress = false;
+      } else {
+        this.loadAtSid(target);
+      }
+    } catch (err) {
+      this.loadError = err;
+    }
+  }
+
   public loadAtSid(sid: string): void {
     this.currentSearch = sid;
     this.currentSearchType = 'ref-point';
@@ -497,6 +561,37 @@ export default class BibleTextService {
     setTimeout(() => {
       this.adjustingScrollPct = false;
     }, 500);
+  }
+
+  /**
+   * Switches this text to another module, keeping the reader's place:
+   * browsing stays at the verse in view (or the nearest one the new module
+   * has), and a search runs again in the new module.
+   */
+  public async setModule(moduleId: string): Promise<void> {
+    if (moduleId === this.moduleId) return;
+    const sid = this.sidInView;
+    this.moduleId = moduleId;
+    this.moduleDbService = new ModuleDbService(moduleId);
+    this.loadError = undefined;
+    try {
+      await Promise.all([this.getModule(), this.getBooks()]);
+      if (this.currentSearchType === 'ref-point') {
+        const target =
+          (sid ? await this.moduleDbService.nearestSid(sid) : undefined) ??
+          this.currentSearch;
+        if (target === this.currentSearch) {
+          await this.getText(target, 'ref-point');
+        } else {
+          // Watched in the constructor, which loads the text there.
+          this.currentSearch = target;
+        }
+      } else {
+        await this.getText(this.currentSearch, this.currentSearchType);
+      }
+    } catch (err) {
+      this.loadError = err;
+    }
   }
 
   private async getModule(): Promise<void> {
