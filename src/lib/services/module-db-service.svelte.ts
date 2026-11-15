@@ -32,6 +32,8 @@ export interface TextWindow<T> {
 
 interface ModuleInfo {
   name: string;
+  /** The short name for tabs and menus, such as "KJV". */
+  abbreviation: string;
   version: string;
   formatVersion: number;
 }
@@ -82,12 +84,20 @@ function split<T>(items: T[], position: (item: T) => number): TextWindow<T> {
 export default class ModuleDbService {
   constructor(private moduleId: string) {}
 
-  /** The module's display name and version, such as "1.1.0". */
-  public async getModuleInfo(): Promise<{ name: string; version: string }> {
+  /** The module's display name, abbreviation, and version, such as "1.1.0". */
+  public async getModuleInfo(): Promise<{
+    name: string;
+    abbreviation: string;
+    version: string;
+  }> {
     const info = await invoke<ModuleInfo>('module_info', {
       moduleId: this.moduleId,
     });
-    return { name: info.name, version: info.version };
+    return {
+      name: info.name,
+      abbreviation: info.abbreviation,
+      version: info.version,
+    };
   }
 
   public async getBooks(): Promise<Record<string, Book>> {

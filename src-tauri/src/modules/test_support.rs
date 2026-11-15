@@ -57,6 +57,24 @@ pub fn fixture_path() -> PathBuf {
         .clone()
 }
 
+/// The bundled KJV's file name, such as `eng_kjv-1.2.0.db`, so tests
+/// don't depend on which version is bundled.
+pub fn kjv_file_name() -> String {
+    fixture_path()
+        .file_name()
+        .expect("a file name")
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// The bundled KJV's version, such as `1.2.0`.
+pub fn kjv_version() -> String {
+    kjv_file_name()
+        .trim_start_matches("eng_kjv-")
+        .trim_end_matches(".db")
+        .to_string()
+}
+
 /// The fixture, opened through the same checks the app uses.
 pub fn kjv() -> ModuleDb {
     ModuleDb::open(&fixture_path()).expect("the bundled KJV should open")

@@ -39,6 +39,8 @@ const KEYS_FOLDER: &str = "keys";
 pub struct ModuleSummary {
     pub id: String,
     pub name: String,
+    /// The short name for tabs and menus, such as "KJV".
+    pub abbreviation: String,
     pub version: String,
     pub file: String,
     /// From the module itself, so covered by its signed file hash.
@@ -255,6 +257,7 @@ pub(crate) fn load_folder<R: Runtime>(
                             .collect(),
                         id: module.id,
                         name: module.name,
+                        abbreviation: module.abbreviation,
                         version: module.version,
                         description: module.description,
                         language: module.language,

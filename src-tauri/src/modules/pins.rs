@@ -41,8 +41,12 @@ pub const PINNED_EDITIONS: &[Pin] = &[Pin {
     major: 1,
     edition: "eBible.org eng-kjv2006, 2026-11-10 release (CrossWire KJV: an electronic edition of Benjamin Blayney's 1769 Oxford text, with Strong's numbers)",
     text_root: "0337278626457c9d994ffe85b0b941affd9cc5fce1d5be90618c46ed381e0b07",
-    // eng_kjv-1.1.0.db, as bundled.
-    known_files: &["a97a27f54eb62d1eac3edf7ec8facf447351ff9dd2e2e647f1060fbb1ebfa0a9"],
+    known_files: &[
+        // eng_kjv-1.1.0.db
+        "a97a27f54eb62d1eac3edf7ec8facf447351ff9dd2e2e647f1060fbb1ebfa0a9",
+        // eng_kjv-1.2.0.db, which added the abbreviation
+        "1aecfa81874ba91f4a9f76fae1ee84470e9b6f8455cf3e2587eff90bdabfe7e5",
+    ],
 }];
 
 /// Checks a module's text against its manifest and the pinned editions,
@@ -298,8 +302,13 @@ mod tests {
 
     #[test]
     fn the_known_kjv_file_needs_its_pinned_root_in_the_manifest() {
+        // The bundled file itself, untouched, so its hash is a known one.
         let dir = tempfile::tempdir().unwrap();
-        let path = kjv_copy(dir.path(), "eng_kjv", "1.1.0", false);
+        let version = crate::modules::test_support::kjv_version();
+        let path = dir
+            .path()
+            .join(crate::modules::test_support::kjv_file_name());
+        std::fs::copy(fixture_path(), &path).unwrap();
         let wrong = Roots {
             text: "0".repeat(64),
             content: "0".repeat(64),
@@ -307,7 +316,7 @@ mod tests {
         sign_with_roots(
             &path,
             "eng_kjv",
-            "1.1.0",
+            &version,
             2,
             &test_key(),
             KJV_EDITION,

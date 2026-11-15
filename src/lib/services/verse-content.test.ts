@@ -3,7 +3,6 @@ import type { Note, VerseChild } from '$lib/model/verse';
 import {
   footnoteLetter,
   letterNotes,
-  moduleAbbreviation,
   notesIn,
   noteText,
   parseChildren,
@@ -107,16 +106,5 @@ describe('notesIn', () => {
     ];
     expect(notesIn(children).map(noteText)).toEqual(['1.1', '1.2']);
     expect(notesIn(['no notes'])).toEqual([]);
-  });
-});
-
-describe('moduleAbbreviation', () => {
-  test('uses the capital initials, leaving out the year', () => {
-    expect(moduleAbbreviation('King James Version (1769)')).toBe('KJV');
-    expect(moduleAbbreviation('Geneva Bible (1599)')).toBe('GB');
-  });
-
-  test('keeps a name that has no initials to use', () => {
-    expect(moduleAbbreviation('textus receptus')).toBe('textus receptus');
   });
 });

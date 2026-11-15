@@ -11,6 +11,8 @@ export interface OlderVersion {
 export interface ModuleSummary {
   id: string;
   name: string;
+  /** The short name for tabs and menus, such as "KJV". */
+  abbreviation: string;
   version: string;
   file: string;
   /** From the module itself, which its signed file hash covers. */

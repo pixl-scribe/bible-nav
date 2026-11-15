@@ -224,7 +224,7 @@ fn is_sha256(text: &str) -> bool {
 mod tests {
     use super::*;
     use crate::modules::integrity::sidecars;
-    use crate::modules::test_support::{fixture_path, test_key};
+    use crate::modules::test_support::{fixture_path, kjv_file_name, kjv_version, test_key};
     use base64::Engine;
     use ed25519_dalek::Signer;
 
@@ -235,10 +235,10 @@ mod tests {
             "manifest": std::fs::read_to_string(files.manifest).unwrap(),
             "signatures": std::fs::read_to_string(files.signatures).unwrap(),
             "download": {
-                "name": "eng_kjv-1.1.0.db.gz",
+                "name": format!("{}.gz", kjv_file_name()),
                 "size": 9305192,
                 "sha256": "0beb8bfe9eb6b76399b79a3624adf6bf181e6b6c33abebc2e6ac57ddc1a0fb36",
-                "urls": ["https://gh.ali360.cloudns.ch/pixl-scribe/bible-nav-modules/releases/download/eng_kjv-1.1.0/eng_kjv-1.1.0.db.gz"]
+                "urls": [format!("https://example.org/{}.gz", kjv_file_name())]
             },
             "about": { "description": "The KJV", "language": "English", "license": "Public Domain" }
         })
@@ -278,7 +278,8 @@ mod tests {
             .replace("1769", "1611");
         changed["manifest"] = manifest.into();
         let mut http = kjv_entry();
-        http["download"]["urls"] = serde_json::json!(["http://example.org/eng_kjv-1.1.0.db.gz"]);
+        http["download"]["urls"] =
+            serde_json::json!([format!("http://example.org/{}.gz", kjv_file_name())]);
         let mut renamed = kjv_entry();
         renamed["download"]["name"] = "other.db.gz".into();
         let (offers, skipped) = check(&catalog(vec![changed, http, renamed, serde_json::json!(7)]));
@@ -288,7 +289,7 @@ mod tests {
         assert!(detail(0).contains("isn't signed by a key"), "{skipped:?}");
         assert!(detail(1).contains("https"), "{skipped:?}");
         assert!(
-            detail(2).contains("isn't eng_kjv-1.1.0.db.gz"),
+            detail(2).contains(&format!("isn't {}.gz", kjv_file_name())),
             "{skipped:?}"
         );
         assert!(detail(3).contains("can't be read"), "{skipped:?}");
@@ -302,8 +303,8 @@ mod tests {
         let manifest = kjv_entry()["manifest"]
             .as_str()
             .unwrap()
-            .replace("\"1.1.0\"", "\"2.0.0\"")
-            .replace("eng_kjv-1.1.0.db", "eng_kjv-2.0.0.db");
+            .replace(&format!("\"{}\"", kjv_version()), "\"2.0.0\"")
+            .replace(&kjv_file_name(), "eng_kjv-2.0.0.db");
         let key = test_key();
         let signatures = format!(
             "ed25519 {} {}\n",

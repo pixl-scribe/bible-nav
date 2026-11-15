@@ -11,6 +11,7 @@ function offer(id: string, version: string, extra = {}) {
     id,
     version,
     name: id,
+    abbreviation: id,
     description: '',
     language: '',
     license: '',

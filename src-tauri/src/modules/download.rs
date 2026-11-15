@@ -277,7 +277,7 @@ fn place(offer: &Offer, checked: &Path, target: &Path) -> Result<()> {
 mod tests {
     use super::*;
     use crate::modules::catalog::{check_entries, parse};
-    use crate::modules::test_support::fixture_path;
+    use crate::modules::test_support::{fixture_path, kjv_file_name};
     use flate2::write::GzEncoder;
     use flate2::Compression;
     use std::collections::HashMap;
@@ -295,8 +295,8 @@ mod tests {
         }
     }
 
-    const URL: &str = "https://example.org/eng_kjv-1.1.0.db.gz";
-    const MIRROR: &str = "https://mirror.example.org/eng_kjv-1.1.0.db.gz";
+    const URL: &str = "https://example.org/eng_kjv.db.gz";
+    const MIRROR: &str = "https://mirror.example.org/eng_kjv.db.gz";
 
     fn gz(bytes: &[u8]) -> Vec<u8> {
         let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
@@ -322,7 +322,7 @@ mod tests {
                 "manifest": fs::read_to_string(files.manifest).unwrap(),
                 "signatures": fs::read_to_string(files.signatures).unwrap(),
                 "download": {
-                    "name": "eng_kjv-1.1.0.db.gz",
+                    "name": format!("{}.gz", kjv_file_name()),
                     "size": compressed.len(),
                     "sha256": hex(&compressed),
                     "urls": urls,
@@ -370,7 +370,7 @@ mod tests {
             &AtomicBool::new(false),
         )
         .unwrap();
-        let target = folder.path().join("eng_kjv-1.1.0.db");
+        let target = folder.path().join(kjv_file_name());
         assert_eq!(installed, Installed::New(target.clone()));
         assert!(ModuleDb::open(&target).is_ok());
         assert!(sidecars(&target).signatures.exists());

@@ -11,6 +11,8 @@ export interface Offer {
   id: string;
   version: string;
   name: string;
+  /** The short name for tabs and menus, such as "KJV". */
+  abbreviation: string;
   description: string;
   language: string;
   license: string;

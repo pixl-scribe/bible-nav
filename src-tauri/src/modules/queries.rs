@@ -20,6 +20,9 @@ use super::error::{ModuleError, Result};
 #[serde(rename_all = "camelCase")]
 pub struct ModuleInfo {
     pub name: String,
+    /// The short name for tabs and menus, such as "KJV": the module's own,
+    /// or for modules made before it had one, guessed from the name.
+    pub abbreviation: String,
     pub description: String,
     pub module_type: String,
     /// The module's id, such as "eng_kjv".
@@ -264,13 +267,30 @@ fn heading_from_row(row: &Row) -> rusqlite::Result<HeadingRow> {
 }
 
 pub fn module_info(conn: &Connection) -> Result<ModuleInfo> {
+    // Modules made before the abbreviation existed (such as eng_kjv 1.1.0)
+    // don't have the column.
+    let has_abbreviation: bool = conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM pragma_table_info('module') WHERE name = 'abbreviation')",
+        [],
+        |row| row.get(0),
+    )?;
+    let abbreviation = if has_abbreviation {
+        "abbreviation"
+    } else {
+        "NULL"
+    };
     let info = conn.query_row(
-        "SELECT name, description, moduleType, fetchId, language, languageCode, license, version, formatVersion
-         FROM module",
+        &format!(
+            "SELECT name, description, moduleType, fetchId, language, languageCode, license, version, formatVersion, {abbreviation}
+             FROM module"
+        ),
         [],
         |row| {
+            let name: String = row.get(0)?;
+            let abbreviation: Option<String> = row.get(9)?;
             Ok(ModuleInfo {
-                name: row.get(0)?,
+                abbreviation: abbreviation.unwrap_or_else(|| guess_abbreviation(&name)),
+                name,
                 description: row.get(1)?,
                 module_type: row.get(2)?,
                 fetch_id: row.get(3)?,
@@ -283,6 +303,32 @@ pub fn module_info(conn: &Connection) -> Result<ModuleInfo> {
         },
     )?;
     Ok(info)
+}
+
+/// An abbreviation for a module that has none: the capital initials of
+/// its name, ignoring anything in brackets ("King James Version (1769)" is
+/// "KJV"), or the whole name if that gives fewer than two.
+pub fn guess_abbreviation(name: &str) -> String {
+    let mut without_brackets = String::new();
+    let mut depth = 0;
+    for character in name.chars() {
+        match character {
+            '(' => depth += 1,
+            ')' if depth > 0 => depth -= 1,
+            _ if depth == 0 => without_brackets.push(character),
+            _ => {}
+        }
+    }
+    let initials: String = without_brackets
+        .split_whitespace()
+        .filter_map(|word| word.chars().next())
+        .filter(|letter| letter.is_uppercase())
+        .collect();
+    if initials.chars().count() >= 2 {
+        initials
+    } else {
+        name.trim().to_string()
+    }
 }
 
 pub fn books(conn: &Connection) -> Result<Vec<Book>> {
@@ -521,6 +567,20 @@ pub fn chapter_notes(conn: &Connection, sid: &str) -> Result<Vec<VerseRow>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn guesses_an_abbreviation_from_capital_initials() {
+        assert_eq!(guess_abbreviation("King James Version (1769)"), "KJV");
+        assert_eq!(guess_abbreviation("Geneva Bible (1599)"), "GB");
+        assert_eq!(guess_abbreviation("Literal Standard Version"), "LSV");
+        assert_eq!(guess_abbreviation("textus receptus"), "textus receptus");
+    }
+
+    #[test]
+    fn the_bundled_kjv_is_abbreviated_kjv() {
+        let db = crate::modules::test_support::kjv();
+        assert_eq!(module_info(db.conn()).unwrap().abbreviation, "KJV");
+    }
     use crate::modules::test_support::kjv;
 
     fn range(from: &str, to: Option<&str>) -> RefRange {

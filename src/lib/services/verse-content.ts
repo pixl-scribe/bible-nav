@@ -83,18 +83,3 @@ export function notesIn(children: VerseChild[]): Note[] {
     return notesIn(child.children);
   });
 }
-
-/**
- * A short name for a module, such as "KJV" for "King James Version (1769)":
- * the capital initials of its name, leaving out anything in brackets.
- * Modules don't store an abbreviation yet; when the format gains one, use
- * that instead. Falls back to the whole name when there are no initials.
- */
-export function moduleAbbreviation(name: string): string {
-  const words = name.replace(/\(.*?\)/g, ' ').split(/\s+/);
-  const initials = words
-    .map((word) => word.charAt(0))
-    .filter((letter) => /\p{Lu}/u.test(letter))
-    .join('');
-  return initials.length >= 2 ? initials : name.trim();
-}

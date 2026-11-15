@@ -8,7 +8,6 @@ import { appSettingsService } from './app-settings-service.svelte';
 import type { AutoCompleteOption } from '$lib/model/auto-complete-option';
 import { splitByLastDelimiter } from '$lib/services/string-utils';
 import { parseSearch, type SearchType } from '$lib/services/search-parser';
-import { moduleAbbreviation } from '$lib/services/verse-content';
 import ModuleDbService, {
   paraBuffer,
   verseBuffer,
@@ -504,7 +503,7 @@ export default class BibleTextService {
     const info = await this.moduleDbService.getModuleInfo();
     this.moduleName = info.name;
     this.moduleVersion = info.version;
-    this.moduleAbbreviation = moduleAbbreviation(this.moduleName);
+    this.moduleAbbreviation = info.abbreviation;
   }
 
   private async getBooks(): Promise<void> {

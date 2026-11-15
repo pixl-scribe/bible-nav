@@ -45,6 +45,8 @@ pub struct OfferSummary {
     pub id: String,
     pub version: String,
     pub name: String,
+    /// The short name for tabs and menus, such as "KJV".
+    pub abbreviation: String,
     pub description: String,
     pub language: String,
     pub license: String,
@@ -196,6 +198,9 @@ fn summarize(offers: &[Offer], installed: &[ModuleSummary]) -> Vec<OfferSummary>
                 id: module.id.clone(),
                 version: module.version.clone(),
                 name: module.name.clone().unwrap_or_else(|| module.id.clone()),
+                abbreviation: module.abbreviation.clone().unwrap_or_else(|| {
+                    super::queries::guess_abbreviation(module.name.as_deref().unwrap_or(&module.id))
+                }),
                 description: offer.entry.about.description.clone(),
                 language: offer.entry.about.language.clone(),
                 license: offer.entry.about.license.clone(),
@@ -378,7 +383,7 @@ async fn reload<R: Runtime>(
 mod tests {
     use super::*;
     use crate::modules::integrity::sidecars;
-    use crate::modules::test_support::fixture_path;
+    use crate::modules::test_support::{fixture_path, kjv_file_name, kjv_version};
 
     fn kjv_offer() -> Offer {
         let files = sidecars(&fixture_path());
@@ -389,10 +394,10 @@ mod tests {
                 "manifest": std::fs::read_to_string(files.manifest).unwrap(),
                 "signatures": std::fs::read_to_string(files.signatures).unwrap(),
                 "download": {
-                    "name": "eng_kjv-1.1.0.db.gz",
+                    "name": format!("{}.gz", kjv_file_name()),
                     "size": 9305192,
                     "sha256": "0beb8bfe9eb6b76399b79a3624adf6bf181e6b6c33abebc2e6ac57ddc1a0fb36",
-                    "urls": ["https://example.org/eng_kjv-1.1.0.db.gz"]
+                    "urls": ["https://example.org/eng_kjv.db.gz"]
                 },
                 "about": { "license": "Public Domain" }
             }]
@@ -407,6 +412,7 @@ mod tests {
         ModuleSummary {
             id: "eng_kjv".into(),
             name: "King James Version (1769)".into(),
+            abbreviation: "KJV".into(),
             version: version.into(),
             file: format!("eng_kjv-{version}.db"),
             description: String::new(),
@@ -427,7 +433,7 @@ mod tests {
             (summary.relation, summary.text_changes)
         };
         assert_eq!(relation(None), ("new", false));
-        assert_eq!(relation(Some("1.1.0")), ("installed", false));
+        assert_eq!(relation(Some(&kjv_version())), ("installed", false));
         assert_eq!(relation(Some("1.0.0")), ("update", false));
         assert_eq!(relation(Some("0.9.0")), ("update", true));
         assert_eq!(relation(Some("2.0.0")), ("older", false));

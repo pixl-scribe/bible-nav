@@ -99,6 +99,7 @@ pub struct FoundModule {
     pub id: String,
     pub version: String,
     pub name: String,
+    pub abbreviation: String,
     pub path: PathBuf,
     pub description: String,
     pub language: String,
@@ -321,6 +322,7 @@ pub fn scan_all(folder: &Path) -> Result<Scanned> {
                 id,
                 version: info.version,
                 name: info.name,
+                abbreviation: info.abbreviation,
                 path: path.clone(),
                 description: info.description,
                 language: info.language,
@@ -629,6 +631,7 @@ mod tests {
     fn rejects_unsafe_ids_and_versions_in_file_names() {
         let info = |id: Option<&str>, version: &str| queries::ModuleInfo {
             name: "Test".into(),
+            abbreviation: "TST".into(),
             description: String::new(),
             module_type: "bible".into(),
             fetch_id: id.map(Into::into),

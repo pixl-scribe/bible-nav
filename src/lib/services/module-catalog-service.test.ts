@@ -10,6 +10,7 @@ const offer = {
   id: 'eng_lsv',
   version: '1.1.0',
   name: 'Literal Standard Version',
+  abbreviation: 'LSV',
   description: '',
   language: 'English',
   license: '',

@@ -48,6 +48,9 @@ pub struct ManifestModule {
     /// The module's display name. Optional: the checks don't need it.
     #[serde(default)]
     pub name: Option<String>,
+    /// Its short name, such as "KJV", in manifests made since it existed.
+    #[serde(default)]
+    pub abbreviation: Option<String>,
 }
 
 /// What the manifest says about the module's text. The roots are only what
