@@ -1,4 +1,5 @@
 <script lang="ts">
+  import TipTooltip from '$lib/components/tip-tooltip.svelte';
   import { ChevronDown, Plus, X } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import { themeService } from '$lib/services/theme-service.svelte.js';
@@ -27,6 +28,7 @@
     searches.tabs[searches.tabs.length - 1]?.moduleId ?? defaultModuleId
   );
 
+  let newSearchGroup = $state<HTMLElement | undefined>();
   let newSearchMenuOpen = $state(false);
   const newSearchSections = $derived<MenuSection[]>([
     {
@@ -97,14 +99,14 @@
           </button>
         </div>
       {/each}
-      <div class="join relative mb-0.5 ml-1">
+      <div class="join relative mb-0.5 ml-1" bind:this={newSearchGroup}>
         <button
           type="button"
           class="btn btn-soft btn-primary btn-sm btn-square join-item"
           aria-label={$_('main.new-search-in', {
             values: { abbr: abbreviationOf(nextModuleId) },
           })}
-          title={$_('main.new-search-in', {
+          data-tip={$_('main.new-search-in', {
             values: { abbr: abbreviationOf(nextModuleId) },
           })}
           onclick={() => searches.add()}
@@ -115,6 +117,7 @@
           type="button"
           class="btn btn-soft btn-primary btn-sm join-item w-6 px-0"
           aria-label={$_('main.new-search-choose')}
+          data-tip={$_('main.new-search-choose')}
           aria-haspopup="menu"
           aria-expanded={newSearchMenuOpen}
           onclick={(event) => {
@@ -133,6 +136,7 @@
           />
         {/if}
       </div>
+      <TipTooltip root={newSearchGroup} placement="bottom" />
     </div>
     <div
       class={[

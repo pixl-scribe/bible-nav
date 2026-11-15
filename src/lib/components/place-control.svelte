@@ -8,6 +8,8 @@
    * arrow is dimmed, never hidden, so the control doesn't shift; it stays
    * focusable and its tooltip says why.
    *
+   * Ctrl+G (Cmd+G) opens the picker, like pressing the place.
+   *
    * ← and → do the same when the cursor isn't in a text box and nothing
    * else (a menu, a dialog) has them. In a right-to-left layout they swap,
    * as the arrows do.
@@ -20,6 +22,7 @@
   } from '@lucide/svelte';
   import { _ } from 'svelte-i18n';
   import type BibleTextService from '$lib/services/bible-text-service.svelte';
+  import TipTooltip from './tip-tooltip.svelte';
 
   let {
     service,
@@ -67,6 +70,20 @@
     'input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="menu"], [role="tablist"], [role="listbox"], dialog';
 
   function onKey(event: KeyboardEvent) {
+    // Ctrl+G (Cmd+G on a Mac) opens the reference picker, even from the
+    // search box: "Go to", as in most editors.
+    if (
+      (event.ctrlKey || event.metaKey) &&
+      !event.altKey &&
+      !event.shiftKey &&
+      event.key.toLowerCase() === 'g'
+    ) {
+      if (!element || element.offsetParent === null) return;
+      if (document.querySelector('dialog[open]')) return;
+      event.preventDefault();
+      onopenpicker();
+      return;
+    }
     // 'Left' and 'Right' are older names some engines still send.
     const left = event.key === 'ArrowLeft' || event.key === 'Left';
     const right = event.key === 'ArrowRight' || event.key === 'Right';
@@ -93,26 +110,27 @@
   class="flex h-8 shrink-0 items-stretch rounded-field border border-primary/50 bg-primary/15 text-base-content"
 >
   {#if showArrows}
-    <div class="tooltip tooltip-bottom flex" data-tip={previousTip}>
-      <button
-        type="button"
-        class={[
-          'flex w-8 items-center justify-center border-e border-primary/35 text-primary',
-          previous ? 'hover:bg-primary/20' : 'cursor-default opacity-35',
-        ]}
-        aria-label={previousTip}
-        aria-disabled={!previous}
-        aria-keyshortcuts="ArrowLeft"
-        onclick={() => step(-1)}
-      >
-        <ChevronLeft size={16} class="rtl:rotate-180" aria-hidden="true" />
-      </button>
-    </div>
+    <button
+      type="button"
+      data-tip={previousTip}
+      class={[
+        'flex w-8 items-center justify-center border-e border-primary/35 text-primary',
+        previous ? 'hover:bg-primary/20' : 'cursor-default opacity-35',
+      ]}
+      aria-label={previousTip}
+      aria-disabled={!previous}
+      aria-keyshortcuts="ArrowLeft"
+      onclick={() => step(-1)}
+    >
+      <ChevronLeft size={16} class="rtl:rotate-180" aria-hidden="true" />
+    </button>
   {/if}
   <button
     type="button"
     class="flex items-center gap-1.5 px-2.5 text-sm font-semibold hover:bg-primary/20"
+    data-tip={$_('place.tip')}
     aria-haspopup="dialog"
+    aria-keyshortcuts="Control+G"
     aria-label={$_('place.go-to', { values: { place: fullPlace } })}
     onclick={onopenpicker}
   >
@@ -122,20 +140,21 @@
     <ChevronDown size={14} class="text-primary" aria-hidden="true" />
   </button>
   {#if showArrows}
-    <div class="tooltip tooltip-bottom flex" data-tip={nextTip}>
-      <button
-        type="button"
-        class={[
-          'flex w-8 items-center justify-center border-s border-primary/35 text-primary',
-          next ? 'hover:bg-primary/20' : 'cursor-default opacity-35',
-        ]}
-        aria-label={nextTip}
-        aria-disabled={!next}
-        aria-keyshortcuts="ArrowRight"
-        onclick={() => step(1)}
-      >
-        <ChevronRight size={16} class="rtl:rotate-180" aria-hidden="true" />
-      </button>
-    </div>
+    <button
+      type="button"
+      data-tip={nextTip}
+      class={[
+        'flex w-8 items-center justify-center border-s border-primary/35 text-primary',
+        next ? 'hover:bg-primary/20' : 'cursor-default opacity-35',
+      ]}
+      aria-label={nextTip}
+      aria-disabled={!next}
+      aria-keyshortcuts="ArrowRight"
+      onclick={() => step(1)}
+    >
+      <ChevronRight size={16} class="rtl:rotate-180" aria-hidden="true" />
+    </button>
   {/if}
 </div>
+<!-- The control's tooltips, below it, kept inside the window. -->
+<TipTooltip root={element} placement="bottom" />

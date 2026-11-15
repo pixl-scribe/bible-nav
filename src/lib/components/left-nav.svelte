@@ -4,9 +4,11 @@
   import Settings from './settings.svelte';
   import AboutDialog from './about-dialog.svelte';
   import ModulesDialog from './modules-dialog.svelte';
+  import TipTooltip from './tip-tooltip.svelte';
   import { modulesDialogService } from '$lib/services/modules-dialog-service.svelte';
 
   let isSettingsOpen = $state(false);
+  let nav = $state<HTMLElement | undefined>();
   let aboutDialogRef = $state<HTMLDialogElement>();
 
   function openSettingsDrawer() {
@@ -18,12 +20,16 @@
   }
 </script>
 
-<ul class="menu bg-base-100 rounded-box rounded-xl space-y-1 self-start">
+<ul
+  class="menu bg-base-100 rounded-box rounded-xl space-y-1 self-start"
+  bind:this={nav}
+>
   <li>
     <!-- svelte-ignore a11y_missing_attribute, a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <a
-      class="btn btn-soft btn-primary tooltip tooltip-right"
+      class="btn btn-soft btn-primary"
       data-tip={$_('left-nav.modules')}
+      aria-label={$_('left-nav.modules')}
       onclick={() => modulesDialogService.open()}
     >
       <LibraryBig />
@@ -32,8 +38,9 @@
   <li>
     <!-- svelte-ignore a11y_missing_attribute, a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <a
-      class="btn btn-soft btn-primary tooltip tooltip-right"
+      class="btn btn-soft btn-primary"
       data-tip={$_('left-nav.settings')}
+      aria-label={$_('left-nav.settings')}
       onclick={openSettingsDrawer}
     >
       <SettingsIcon />
@@ -42,8 +49,9 @@
   <li>
     <!-- svelte-ignore a11y_missing_attribute, a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <a
-      class="btn btn-soft btn-primary tooltip tooltip-right"
+      class="btn btn-soft btn-primary"
       data-tip={$_('left-nav.about')}
+      aria-label={$_('left-nav.about')}
       onclick={() => {
         aboutDialogRef?.showModal();
       }}
@@ -52,6 +60,7 @@
     </a>
   </li>
 </ul>
+<TipTooltip root={nav} placement="right" />
 
 <input
   id="my-drawer"

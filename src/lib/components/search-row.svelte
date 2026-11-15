@@ -6,6 +6,8 @@
   import ModuleSelector from './module-selector.svelte';
   import ModuleMenu, { type MenuSection } from './module-menu.svelte';
   import PlaceControl from './place-control.svelte';
+  import ReferencePicker from './reference-picker.svelte';
+  import TipTooltip from './tip-tooltip.svelte';
 
   let {
     bibleTextService,
@@ -33,6 +35,8 @@
   } = $props();
 
   let inputRef = $state<HTMLInputElement | undefined>(undefined);
+  let picker = $state<ReferencePicker | undefined>();
+  let searchBar = $state<HTMLElement | undefined>();
   let parallelMenuOpen = $state(false);
   const offersMenu = $derived(!parallelOpen && !!parallelMenu);
 
@@ -82,7 +86,7 @@
 </script>
 
 {#if showSearch}
-  <div class="flex w-full p-2 relative">
+  <div class="flex w-full p-2 relative" bind:this={searchBar}>
     <label class="input w-full">
       <Search size={18} />
       <input
@@ -98,6 +102,11 @@
       <button
         type="button"
         class={['btn btn-soft btn-primary ml-2', parallelOpen && 'btn-active']}
+        data-tip={offersMenu
+          ? $_('parallel.tip-open')
+          : parallelOpen
+            ? $_('parallel.tip-hide')
+            : $_('parallel.tip-show')}
         aria-pressed={offersMenu ? undefined : parallelOpen}
         aria-haspopup={offersMenu ? 'menu' : undefined}
         aria-expanded={offersMenu ? parallelMenuOpen : undefined}
@@ -133,6 +142,8 @@
       </ul>
     {/if}
   </div>
+  <!-- The Parallel button's tooltip. -->
+  <TipTooltip root={searchBar} placement="bottom" />
 {/if}
 <div
   class={[
@@ -151,16 +162,13 @@
     />
   {/if}
   {#if showSearch && bibleTextService}
-    <!-- The main text's place, with the chapter arrows. Until the
-         reference picker is built, pressing the place goes to the search
-         box, where a reference can be typed. -->
+    <!-- The main text's place, with the chapter arrows; the place (or
+         Ctrl+G) opens the reference picker. -->
     <PlaceControl
       service={bibleTextService}
-      onopenpicker={() => {
-        inputRef?.focus();
-        inputRef?.select();
-      }}
+      onopenpicker={() => picker?.open()}
     />
+    <ReferencePicker bind:this={picker} service={bibleTextService} />
   {:else}
     <!-- A parallel text follows the main text: its place is shown only. -->
     <div class="shrink-0">{bibleTextService?.referenceLabel}</div>

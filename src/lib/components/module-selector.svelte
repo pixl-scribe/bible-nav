@@ -53,7 +53,7 @@
 <div class="relative min-w-0">
   <button
     type="button"
-    class="btn btn-sm h-8 max-w-full min-w-0 flex-nowrap gap-2 border-primary/40 bg-primary/10 px-1 pr-2.5 font-normal hover:bg-primary/20"
+    class="btn btn-sm h-8 max-w-full min-w-0 flex-nowrap gap-2 border-primary/40 bg-primary/10 px-1 pr-2.5 font-normal shadow-none hover:bg-primary/20"
     aria-haspopup="menu"
     aria-expanded={open}
     aria-label={$_('module-menu.selector-label', {

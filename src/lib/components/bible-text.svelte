@@ -2,7 +2,9 @@
   import ModuleMessage from './module-message.svelte';
   import { onMount, tick, untrack } from 'svelte';
   import { _ } from 'svelte-i18n';
-  import BibleTextService from '$lib/services/bible-text-service.svelte.js';
+  import BibleTextService, {
+    type ScrollTarget,
+  } from '$lib/services/bible-text-service.svelte.js';
   import Paragraph from './paragraph.svelte';
   import Verse from './verse.svelte';
   import SearchRow from './search-row.svelte';
@@ -352,7 +354,13 @@
    * Bring a verse to the top once its text is drawn. The first verse of a
    * chapter brings the chapter's start, so a Psalm title above it shows. A
    * smooth target glides to the verse and centres it (a Notes tab heading).
+   *
+   * A verse can only reach the top if a screen of text follows it, so for
+   * a verse near the end of a short chapter (Hosea 4:12 of 19) the chapters
+   * after it are loaded first; otherwise the pane would stop short and show
+   * an earlier verse at the top.
    */
+  let placing: ScrollTarget | undefined;
   $effect(() => {
     const target = bibleTextService?.scrollTarget;
     if (!target) return;
@@ -365,6 +373,9 @@
       if (!pane || !svc || svc.scrollTarget !== target) return;
       // A hidden pane (a parallel tab not shown) can't scroll: leave it.
       if (pane.clientHeight === 0) return;
+      // Loading room below redraws the chapters and runs this again: let
+      // the first run finish placing this target.
+      if (placing === target) return;
       const isFirst =
         svc.mode === 'chapters' &&
         target.sid === firstVerseOf(chapterOfSid(target.sid));
@@ -372,6 +383,13 @@
         (isFirst ? findChapter(chapterOfSid(target.sid)) : null) ??
         findVerse(target.sid);
       if (!element) return;
+      placing = target;
+      try {
+        await makeRoomBelow(pane, svc, element);
+      } finally {
+        placing = undefined;
+      }
+      if (svc.scrollTarget !== target) return;
       svc.scrollTarget = undefined;
       if (target.smooth) {
         // A chapter's start goes to the top: centring a whole chapter
@@ -391,6 +409,28 @@
       measureTop();
     });
   });
+
+  /**
+   * Loads chapters after the last one until a screen of text follows
+   * `element`'s top, so it can be scrolled to the top of the pane. Stops at
+   * the end of the module (the last verses of Revelation simply can't).
+   */
+  async function makeRoomBelow(
+    pane: HTMLElement,
+    svc: BibleTextService,
+    element: HTMLElement
+  ) {
+    if (svc.mode !== 'chapters') return;
+    for (let step = 0; step < 6; step++) {
+      const fromTop =
+        element.getBoundingClientRect().top -
+        pane.getBoundingClientRect().top +
+        pane.scrollTop;
+      if (pane.scrollHeight - fromTop >= pane.clientHeight) return;
+      if (!(await svc.extend(1))) return;
+      await tick();
+    }
+  }
 
   // Switching grouping keeps the verse at the top.
   $effect(() => {

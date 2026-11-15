@@ -67,7 +67,7 @@
         </span>
       {/if}
       <button
-        class="btn btn-sm btn-outline"
+        class="btn btn-sm btn-outline btn-primary"
         disabled={moduleCatalogService.checking}
         aria-busy={moduleCatalogService.checking}
         onclick={() => moduleCatalogService.check()}

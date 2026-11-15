@@ -16,6 +16,7 @@ import {
   type Chapter,
 } from '$lib/services/chapter-text';
 import { adjacentChapter, type BookOutline } from './chapter-steps';
+import { recentPlaces } from './recent-places.svelte';
 
 /**
  * How the pane shows text:
@@ -160,6 +161,21 @@ export default class BibleTextService {
    */
   public chapterStep(step: 1 | -1): string | undefined {
     return adjacentChapter(this.outline, this.placeChapter, step);
+  }
+
+  /**
+   * Goes to verse `sid` from the reference picker: reads chapters from
+   * there, with the verse at the top. The search box is emptied, since the
+   * reader has left whatever it held (a list of references, say), and both
+   * the place left and the place reached go into the picker's Recent row.
+   */
+  public goTo(sid: string): void {
+    this.lead();
+    const from = this.topSid;
+    if (from && this.mode === 'chapters') recentPlaces.add(from);
+    recentPlaces.add(sid);
+    if (this.searchInput) this.searchInput = '';
+    this.openAt(sid);
   }
 
   /** Goes to verse 1 of the previous (-1) or next (1) chapter, at the top. */

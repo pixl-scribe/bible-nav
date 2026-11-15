@@ -69,7 +69,8 @@
     </div>
     <div class="modal-action">
       <form method="dialog">
-        <button class="btn">{$_('common.close')}</button>
+        <button class="btn btn-outline btn-primary">{$_('common.close')}</button
+        >
       </form>
     </div>
   </div>

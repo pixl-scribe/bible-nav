@@ -77,7 +77,9 @@
 
     <div class="modal-action mt-0">
       <form method="dialog">
-        <button class="btn btn-outline">{$_('modules.change.cancel')}</button>
+        <button class="btn btn-outline btn-primary"
+          >{$_('modules.change.cancel')}</button
+        >
       </form>
       <button class="btn btn-primary" onclick={confirm}>
         {$_('modules.change.confirm')}

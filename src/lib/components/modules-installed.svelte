@@ -63,7 +63,7 @@
       </button>
     {/if}
     <button
-      class="btn btn-sm btn-outline"
+      class="btn btn-sm btn-outline btn-primary"
       disabled={moduleCatalogService.checking}
       aria-busy={moduleCatalogService.checking}
       onclick={() => moduleCatalogService.check()}
@@ -106,12 +106,17 @@
                 >
               {/if}
               {#if module.textVerified}
+                <!-- Focusable, so keyboard readers can reach its hint. -->
+                <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
                 <span
                   class="badge badge-sm badge-success badge-soft"
-                  title={$_('modules.text-verified.hint')}
+                  tabindex="0"
+                  data-tip={$_('modules.text-verified.hint')}
                 >
                   <Check size={12} aria-hidden="true" />
                   {$_('modules.text-verified')}
+                  <span class="sr-only">{$_('modules.text-verified.hint')}</span
+                  >
                 </span>
               {/if}
             </div>
@@ -122,7 +127,7 @@
             </p>
           </div>
           <button
-            class="btn btn-sm btn-outline shrink-0"
+            class="btn btn-sm btn-outline btn-primary shrink-0"
             aria-expanded={!!expanded[module.id]}
             onclick={() => (expanded[module.id] = !expanded[module.id])}
           >
@@ -276,7 +281,7 @@
     </div>
     <div class="flex gap-2">
       <button
-        class="btn btn-sm btn-outline"
+        class="btn btn-sm btn-outline btn-primary"
         onclick={() => moduleFolderService.openFolder()}
       >
         {$_('modules.open-folder')}

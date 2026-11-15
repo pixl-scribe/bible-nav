@@ -8,6 +8,7 @@
   import { _ } from 'svelte-i18n';
   import ModulesInstalled from './modules-installed.svelte';
   import ModulesDownload from './modules-download.svelte';
+  import TipTooltip from './tip-tooltip.svelte';
   import {
     modulesDialogService,
     type ModulesTab,
@@ -17,12 +18,14 @@
     $props();
 
   const tabs: ModulesTab[] = ['installed', 'download'];
+  let box = $state<HTMLElement | undefined>();
   // The tab to show; "Get more modules…" opens the dialog on Download.
   const selected = $derived(modulesDialogService.tab);
 </script>
 
 <dialog bind:this={dialog} class="modal" aria-labelledby="modules-title">
   <div
+    bind:this={box}
     class="modal-box w-11/12 max-w-3xl h-[85vh] max-h-[760px] flex flex-col gap-4 p-6"
   >
     <div class="flex items-center justify-between">
@@ -70,4 +73,6 @@
   <form method="dialog" class="modal-backdrop">
     <button tabindex="-1">{$_('common.close')}</button>
   </form>
+  <!-- Inside the dialog, so it shows above it. -->
+  <TipTooltip root={box} boundary={box} />
 </dialog>
