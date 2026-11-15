@@ -359,6 +359,41 @@ pub fn books(conn: &Connection) -> Result<Vec<Book>> {
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
+/// One book's chapters, for stepping between chapters and for the
+/// reference picker: `verses[0]` is how many verses chapter 1 has (its
+/// highest verse number), and so on.
+#[derive(Debug, Serialize)]
+pub struct BookOutline {
+    pub code: String,
+    pub verses: Vec<u32>,
+}
+
+/// Every book in order, with the verse count of each of its chapters. One
+/// small query: about 1,200 numbers for a whole Bible.
+pub fn book_outline(conn: &Connection) -> Result<Vec<BookOutline>> {
+    let mut statement = conn.prepare(
+        "SELECT b.code, v.chapter, max(v.nbr)
+         FROM verses v JOIN books b ON b.id = v.bookId
+         GROUP BY v.bookId, v.chapter
+         ORDER BY v.bookId, v.chapter",
+    )?;
+    let mut rows = statement.query([])?;
+    let mut outline: Vec<BookOutline> = Vec::new();
+    while let Some(row) = rows.next()? {
+        let code: String = row.get(0)?;
+        let verses: u32 = row.get(2)?;
+        // Rows come grouped by book, so a new code starts a new book.
+        match outline.last_mut() {
+            Some(book) if book.code == code => book.verses.push(verses),
+            _ => outline.push(BookOutline {
+                code,
+                verses: vec![verses],
+            }),
+        }
+    }
+    Ok(outline)
+}
+
 /// The id of the verse with this sid, such as "JHN 3:16".
 pub fn verse_id_for_sid(conn: &Connection, sid: &str) -> Result<i64> {
     conn.query_row("SELECT id FROM verses WHERE sid = ?1", [sid], |row| {
@@ -758,6 +793,22 @@ mod tests {
             info.format_version,
             crate::modules::db::SUPPORTED_FORMAT_VERSION
         );
+    }
+
+    #[test]
+    fn the_outline_counts_every_chapters_verses() {
+        let outline = book_outline(kjv().conn()).unwrap();
+        assert_eq!(outline.len(), 66);
+        assert_eq!(outline[0].code, "GEN");
+        assert_eq!(outline[0].verses.len(), 50);
+        assert_eq!(outline[0].verses[0], 31);
+        let psalms = outline.iter().find(|book| book.code == "PSA").unwrap();
+        assert_eq!(psalms.verses[118], 176);
+        let chapters: usize = outline.iter().map(|book| book.verses.len()).sum();
+        let verses: u32 = outline.iter().flat_map(|book| &book.verses).sum();
+        assert_eq!((chapters, verses), (1189, 31102));
+        assert_eq!(outline[65].code, "REV");
+        assert_eq!(outline[65].verses.len(), 22);
     }
 
     #[test]

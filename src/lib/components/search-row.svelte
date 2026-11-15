@@ -5,6 +5,7 @@
   import type { AutoCompleteOption } from '$lib/model/auto-complete-option';
   import ModuleSelector from './module-selector.svelte';
   import ModuleMenu, { type MenuSection } from './module-menu.svelte';
+  import PlaceControl from './place-control.svelte';
 
   let {
     bibleTextService,
@@ -135,7 +136,7 @@
 {/if}
 <div
   class={[
-    'flex items-center justify-between gap-2 text-xs text-base-content/60 w-full px-2 pb-2 border-b border-base-content/10',
+    '@container flex items-center justify-between gap-2 text-xs text-base-content/60 w-full px-2 pb-2 border-b border-base-content/10',
     !showSearch && 'pt-2',
   ]}
 >
@@ -149,5 +150,19 @@
       onselect={onSelectModule}
     />
   {/if}
-  <div>{bibleTextService?.referenceLabel}</div>
+  {#if showSearch && bibleTextService}
+    <!-- The main text's place, with the chapter arrows. Until the
+         reference picker is built, pressing the place goes to the search
+         box, where a reference can be typed. -->
+    <PlaceControl
+      service={bibleTextService}
+      onopenpicker={() => {
+        inputRef?.focus();
+        inputRef?.select();
+      }}
+    />
+  {:else}
+    <!-- A parallel text follows the main text: its place is shown only. -->
+    <div class="shrink-0">{bibleTextService?.referenceLabel}</div>
+  {/if}
 </div>

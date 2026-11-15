@@ -15,6 +15,7 @@ import {
   firstVerseOf,
   type Chapter,
 } from '$lib/services/chapter-text';
+import { adjacentChapter, type BookOutline } from './chapter-steps';
 
 /**
  * How the pane shows text:
@@ -60,6 +61,8 @@ export default class BibleTextService {
   /** A short name for the module, such as "KJV". */
   public moduleAbbreviation = $state<string>('');
   public books = $state<Record<string, Book>>({});
+  /** Every book's chapters and verse counts, in order. */
+  public outline = $state<BookOutline[]>([]);
   /** The last load's error, for `errorMessage` to describe. */
   public loadError = $state<unknown>(undefined);
 
@@ -144,6 +147,27 @@ export default class BibleTextService {
   /** The place shown beside the selector, such as 'Gen 1:8'. */
   public get referenceLabel(): string {
     return this.topSid ? this.formatAbbreviatedRefFromSid(this.topSid) : '';
+  }
+
+  /** The chapter being read, such as 'GEN 4': the one at the top. */
+  public get placeChapter(): string {
+    return chapterOfSid(this.topSid ?? this.browseSid);
+  }
+
+  /**
+   * The chapter before (-1) or after (1) the one being read, such as
+   * 'GEN 5'; undefined at either end of the module.
+   */
+  public chapterStep(step: 1 | -1): string | undefined {
+    return adjacentChapter(this.outline, this.placeChapter, step);
+  }
+
+  /** Goes to verse 1 of the previous (-1) or next (1) chapter, at the top. */
+  public stepChapter(step: 1 | -1): void {
+    const target = this.chapterStep(step);
+    if (!target) return;
+    this.lead();
+    this.openAt(`${target}:1`);
   }
 
   /** Whether the chapter holding `sid` is loaded. */
@@ -503,6 +527,9 @@ export default class BibleTextService {
   }
 
   private async getBooks(): Promise<void> {
-    this.books = await this.moduleDbService.getBooks();
+    [this.books, this.outline] = await Promise.all([
+      this.moduleDbService.getBooks(),
+      this.moduleDbService.getOutline(),
+    ]);
   }
 }

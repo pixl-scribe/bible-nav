@@ -48,10 +48,12 @@
   ]);
 </script>
 
-<div class="relative">
+<!-- min-w-0 at each level lets the name shrink to an ellipsis when the
+     row is narrow, instead of wrapping onto two lines. -->
+<div class="relative min-w-0">
   <button
     type="button"
-    class="btn btn-sm h-8 gap-2 border-primary/40 bg-primary/10 px-1 pr-2.5 font-normal hover:bg-primary/20"
+    class="btn btn-sm h-8 max-w-full min-w-0 flex-nowrap gap-2 border-primary/40 bg-primary/10 px-1 pr-2.5 font-normal hover:bg-primary/20"
     aria-haspopup="menu"
     aria-expanded={open}
     aria-label={$_('module-menu.selector-label', {
@@ -64,14 +66,14 @@
   >
     {#if name}
       <span
-        class="rounded bg-primary px-1.5 py-0.5 text-xs font-bold text-primary-content"
+        class="shrink-0 rounded bg-primary px-1.5 py-0.5 text-xs font-bold text-primary-content"
         >{abbreviation}</span
       >
-      <span class="text-xs">
+      <span class="min-w-0 truncate text-xs">
         {$_('module.nameAndVersion', { values: { name, version } })}
       </span>
     {/if}
-    <ChevronDown size={14} aria-hidden="true" />
+    <ChevronDown size={14} class="shrink-0" aria-hidden="true" />
   </button>
   {#if open}
     <ModuleMenu

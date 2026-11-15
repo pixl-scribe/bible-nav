@@ -17,7 +17,7 @@ use tauri::State;
 
 use super::db::ModuleDb;
 use super::error::{ModuleError, Result};
-use super::queries::{self, Book, IndexedVerse, ModuleInfo, RefRange, VerseRow};
+use super::queries::{self, Book, BookOutline, IndexedVerse, ModuleInfo, RefRange, VerseRow};
 
 /// The modules currently open, by id (such as "eng_kjv").
 ///
@@ -93,6 +93,15 @@ pub async fn module_info(
 #[tauri::command]
 pub async fn books(registry: State<'_, ModuleRegistry>, module_id: String) -> Result<Vec<Book>> {
     run(&registry, &module_id, queries::books).await
+}
+
+/// Every book's chapters and their verse counts.
+#[tauri::command]
+pub async fn book_outline(
+    registry: State<'_, ModuleRegistry>,
+    module_id: String,
+) -> Result<Vec<BookOutline>> {
+    run(&registry, &module_id, queries::book_outline).await
 }
 
 /// The sids of every verse in the reference ranges.

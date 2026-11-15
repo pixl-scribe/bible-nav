@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import type { BookOutline } from './chapter-steps';
 import type { Book } from '$lib/model/book';
 import type {
   ChapterNote,
@@ -88,6 +89,11 @@ export default class ModuleDbService {
         sid,
       })) ?? undefined
     );
+  }
+
+  /** Every book's chapters and their verse counts, in order. */
+  public async getOutline(): Promise<BookOutline[]> {
+    return invoke<BookOutline[]>('book_outline', { moduleId: this.moduleId });
   }
 
   public async getBooks(): Promise<Record<string, Book>> {
