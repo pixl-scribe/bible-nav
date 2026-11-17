@@ -20,8 +20,8 @@ use super::trust::Trust;
 /// obvious place, so a fork can point at its own. Some networks can't look
 /// up raw.githubusercontent.com, so github.com's own address comes first.
 pub const CATALOG_URLS: &[&str] = &[
-    "https://gh.ali360.cloudns.ch/pixl-scribe/bible-nav-modules/raw/master/catalog.json",
-    "https://raw-githubusercontent-com.072103.xyz/pixl-scribe/bible-nav-modules/master/catalog.json",
+    "https://github.com/pixl-scribe/bible-nav-modules/raw/master/catalog.json",
+    "https://raw.githubusercontent.com/pixl-scribe/bible-nav-modules/master/catalog.json",
 ];
 
 /// The most a catalog may be: far more than a real one, so a broken or
@@ -339,5 +339,25 @@ mod tests {
         let newer = br#"{"type":"bible-nav module catalog","catalogVersion":2}"#;
         assert!(parse(newer, "test").is_err());
         assert!(parse(b"<html>not found</html>", "test").is_err());
+    }
+    /// The hosts the app may fetch the catalog from. On 2026-11-16 both
+    /// catalog addresses were found pointing at third-party GitHub proxies:
+    /// the full addresses had been rewritten on their way into the code. This
+    /// test catches that; keep this list short and readable, so a strange
+    /// host stands out in review. Add biblenav.org when it serves the catalog.
+    const TRUSTED_HOSTS: [&str; 2] = ["github.com", "raw.githubusercontent.com"];
+
+    #[test]
+    fn catalog_addresses_are_only_on_trusted_hosts() {
+        for url in CATALOG_URLS {
+            let host = url
+                .strip_prefix("https://")
+                .and_then(|rest| rest.split('/').next())
+                .unwrap_or_default();
+            assert!(
+                TRUSTED_HOSTS.contains(&host),
+                "catalog address {url} is not on a trusted host"
+            );
+        }
     }
 }
