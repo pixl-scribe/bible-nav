@@ -415,6 +415,7 @@ mod tests {
             abbreviation: "KJV".into(),
             module_type: "bible".into(),
             has_notes: true,
+            lookups: Vec::new(),
             version: version.into(),
             file: format!("eng_kjv-{version}.db"),
             description: String::new(),

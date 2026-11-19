@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use super::db::SUPPORTED_FORMAT_VERSION;
 use super::error::{ModuleError, Result};
-use super::integrity::{check_manifest, Manifest};
+use super::integrity::{check_manifest, Manifest, ModuleKind};
 use super::pins::{self, Pin};
 use super::problem::Problem;
 use super::statements::Found;
@@ -206,7 +206,17 @@ fn check_entry(entry: &Entry, trust: &Trust) -> Result<Checked> {
     // The manifest's own text root is what it claims; the file's real root
     // is computed after downloading. Here the claim alone decides whether
     // the entry can be offered.
-    match pins::check_pinned(&manifest, &manifest.text.text_root, pins::PINNED_EDITIONS) {
+    // Only Bibles are pinned; a lexicon needs only its signature and file.
+    let text_root = match (manifest.module_kind(), &manifest.text) {
+        (ModuleKind::Lexicon, _) => return Ok((manifest, Availability::Available, None)),
+        (ModuleKind::Bible, Some(text)) => text.text_root.clone(),
+        (ModuleKind::Bible, None) => {
+            return Err(ModuleError::Untrusted(
+                "its manifest has no text section".into(),
+            ))
+        }
+    };
+    match pins::check_pinned(&manifest, &text_root, pins::PINNED_EDITIONS) {
         Ok(pin) => Ok((manifest, Availability::Available, pin)),
         Err(ModuleError::Unsupported(_)) => Ok((manifest, Availability::NeedsNewerApp, None)),
         Err(error) => Err(error),

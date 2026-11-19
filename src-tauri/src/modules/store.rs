@@ -16,7 +16,7 @@ use flate2::read::GzDecoder;
 
 use super::db::ModuleDb;
 use super::error::{ModuleError, Result};
-use super::integrity::{self, Sidecars};
+use super::integrity::{self, ModuleKind, Sidecars};
 use super::queries;
 use super::trust;
 
@@ -104,6 +104,8 @@ pub struct FoundModule {
     pub module_type: String,
     /// Whether any verse has a footnote.
     pub has_notes: bool,
+    /// For a lexicon, what it can be found by, such as "strong:H".
+    pub lookups: Vec<String>,
     pub path: PathBuf,
     pub description: String,
     pub language: String,
@@ -328,7 +330,9 @@ pub fn scan_all(folder: &Path) -> Result<Scanned> {
                 name: info.name,
                 abbreviation: info.abbreviation,
                 module_type: info.module_type,
-                has_notes: has_notes_cached(&path, db.conn())?,
+                // A lexicon has no verses, so no footnotes.
+                has_notes: db.kind() == ModuleKind::Bible && has_notes_cached(&path, db.conn())?,
+                lookups: db.lookups().to_vec(),
                 path: path.clone(),
                 description: info.description,
                 language: info.language,

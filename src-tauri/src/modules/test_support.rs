@@ -170,3 +170,107 @@ pub fn sign_with_roots(
     )
     .expect("signatures");
 }
+
+/// Writes a small lexicon module, `<id>-<version>.db` in `dir`, with the
+/// generator's tables (bible-nav-modules/docs/lexicon-format.md). Each
+/// entry is (key, headword, body JSON); keys that are Strong's numbers get
+/// a `strong` lookup, as the generator gives them.
+pub fn write_lexicon(
+    dir: &Path,
+    id: &str,
+    version: &str,
+    entries: &[(&str, &str, &str)],
+) -> PathBuf {
+    let path = dir.join(format!("{id}-{version}.db"));
+    let conn = rusqlite::Connection::open(&path).expect("lexicon");
+    conn.execute_batch(
+        "CREATE TABLE module (formatVersion INTEGER NOT NULL, name TEXT NOT NULL,
+           abbreviation TEXT NOT NULL, description TEXT NOT NULL, moduleType TEXT NOT NULL,
+           year INTEGER, fetchId TEXT, language TEXT NOT NULL, languageCode TEXT NOT NULL,
+           license TEXT NOT NULL, version TEXT NOT NULL);
+         CREATE TABLE entries (id INTEGER PRIMARY KEY, key TEXT NOT NULL UNIQUE,
+           headword TEXT NOT NULL, headwordLang TEXT NOT NULL, homograph TEXT NOT NULL,
+           translit TEXT NOT NULL, pronunciation TEXT NOT NULL, allCited INTEGER NOT NULL,
+           body TEXT NOT NULL);
+         CREATE TABLE lookups (kind TEXT NOT NULL, value TEXT NOT NULL,
+           entryId INTEGER NOT NULL, PRIMARY KEY (kind, value, entryId)) WITHOUT ROWID;",
+    )
+    .expect("tables");
+    conn.execute(
+        "INSERT INTO module VALUES (1, 'Test Lexicon', 'TL', 'A test.', 'lexicon', NULL, ?1,
+           'English', 'eng', 'Public domain.', ?2)",
+        [id, version],
+    )
+    .expect("module row");
+    for (index, (key, headword, body)) in entries.iter().enumerate() {
+        let id = index as i64 + 1;
+        conn.execute(
+            "INSERT INTO entries VALUES (?1, ?2, ?3, 'hbo', '', 'tr', 'pron', 0, ?4)",
+            rusqlite::params![id, key, headword, body],
+        )
+        .expect("entry");
+        if super::lexicon::normalize_strong(key).as_deref() == Some(*key) {
+            conn.execute(
+                "INSERT INTO lookups VALUES ('strong', ?1, ?2)",
+                rusqlite::params![key, id],
+            )
+            .expect("lookup");
+        }
+    }
+    drop(conn);
+    path
+}
+
+/// Signs a lexicon with a lexicon manifest whose roots are computed from
+/// the file. `change` may alter the manifest first, to test what the app
+/// refuses.
+pub fn sign_lexicon(module: &Path, key: &SigningKey, change: impl FnOnce(&mut serde_json::Value)) {
+    let conn =
+        rusqlite::Connection::open_with_flags(module, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .expect("lexicon");
+    let roots = super::lexicon_tree::roots(&conn).expect("roots");
+    let (id, version): (String, String) = conn
+        .query_row("SELECT fetchId, version FROM module", [], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
+        .expect("module row");
+    drop(conn);
+    let bytes = fs::read(module).expect("module");
+    let sha256: String = Sha256::digest(&bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    let mut manifest = serde_json::json!({
+        "type": MANIFEST_TYPE,
+        "manifestVersion": 1,
+        "module": { "id": id, "version": version, "moduleType": "lexicon", "formatVersion": 1 },
+        "file": {
+            "name": module.file_name().unwrap().to_string_lossy(),
+            "size": bytes.len(),
+            "sha256": sha256,
+        },
+        "entries": {
+            "treeVersion": 1,
+            "edition": "Test edition",
+            "source": "Test source",
+            "lookups": ["strong:H"],
+            "count": roots.count,
+            "keysRoot": roots.keys,
+            "contentRoot": roots.content,
+        },
+    });
+    change(&mut manifest);
+    let manifest = serde_json::to_string_pretty(&manifest).unwrap() + "\n";
+    let signature = key.sign(manifest.as_bytes());
+    let files = sidecars(module);
+    fs::write(&files.manifest, &manifest).expect("manifest");
+    fs::write(
+        &files.signatures,
+        format!(
+            "ed25519 {} {}\n",
+            key_id(&key.verifying_key()),
+            base64::engine::general_purpose::STANDARD.encode(signature.to_bytes())
+        ),
+    )
+    .expect("signatures");
+}

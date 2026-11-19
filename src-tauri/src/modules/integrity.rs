@@ -20,6 +20,7 @@ use ed25519_dalek::{Signature, VerifyingKey};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+use super::db::LEXICON_FORMAT_VERSION;
 use super::error::{ModuleError, Result};
 use super::trust::Trust;
 
@@ -36,7 +37,32 @@ pub struct Manifest {
     pub manifest_version: u32,
     pub module: ManifestModule,
     pub file: ManifestFile,
-    pub text: ManifestText,
+    /// A Bible's text roots. Every Bible manifest has it; a lexicon's doesn't.
+    #[serde(default)]
+    pub text: Option<ManifestText>,
+    /// A lexicon's roots and lookups. Only lexicon manifests have it.
+    #[serde(default)]
+    pub entries: Option<ManifestEntries>,
+}
+
+/// What kind of module a manifest describes. `check_manifest` accepts only
+/// these, each with the sections it needs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModuleKind {
+    Bible,
+    Lexicon,
+}
+
+impl Manifest {
+    /// The kind of module: a manifest without `module.moduleType` is a
+    /// Bible, as every manifest was before lexicons. Call it only on a
+    /// manifest `check_manifest` accepted.
+    pub fn module_kind(&self) -> ModuleKind {
+        match self.module.module_type.as_deref() {
+            Some("lexicon") => ModuleKind::Lexicon,
+            _ => ModuleKind::Bible,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -51,6 +77,9 @@ pub struct ManifestModule {
     /// Its short name, such as "KJV", in manifests made since it existed.
     #[serde(default)]
     pub abbreviation: Option<String>,
+    /// "lexicon", or absent for a Bible.
+    #[serde(default)]
+    pub module_type: Option<String>,
 }
 
 /// What the manifest says about the module's text. The roots are only what
@@ -62,6 +91,21 @@ pub struct ManifestText {
     pub tree_version: u32,
     pub text_root: String,
     pub content_root: String,
+}
+
+/// What a lexicon's manifest says about its entries
+/// (bible-nav-modules/docs/lexicon-format.md, "The manifest"). As with a
+/// Bible's text, the roots are only what the signer wrote:
+/// `lexicon_tree.rs` checks them against roots computed from the module.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManifestEntries {
+    pub tree_version: u32,
+    pub keys_root: String,
+    pub content_root: String,
+    /// What the lexicon can be found by, such as "strong:H".
+    pub lookups: Vec<String>,
+    pub count: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -153,9 +197,31 @@ pub fn check_manifest(
             "its manifest is of a kind this app doesn't know".into(),
         ));
     }
-    if manifest.module.format_version != format_version {
+    // Each kind of module has its own format version and its own section:
+    // `format_version` is the Bible format this caller reads.
+    let (wanted, sections_ok) = match manifest.module.module_type.as_deref() {
+        None | Some("bible") => (
+            format_version,
+            manifest.text.is_some() && manifest.entries.is_none(),
+        ),
+        Some("lexicon") => (
+            LEXICON_FORMAT_VERSION,
+            manifest.entries.is_some() && manifest.text.is_none(),
+        ),
+        Some(other) => {
+            return Err(ModuleError::Unsupported(format!(
+                "it's a {other} module, which this version of Bible Nav can't read"
+            )))
+        }
+    };
+    if !sections_ok {
+        return Err(untrusted(
+            "its manifest doesn't have the sections its kind of module needs".into(),
+        ));
+    }
+    if manifest.module.format_version != wanted {
         return Err(ModuleError::Unsupported(format!(
-            "format version {} isn't supported (this app reads version {format_version})",
+            "format version {} isn't supported (this app reads version {wanted})",
             manifest.module.format_version
         )));
     }

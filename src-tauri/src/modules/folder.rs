@@ -45,6 +45,9 @@ pub struct ModuleSummary {
     pub module_type: String,
     /// Whether it has footnotes, so a Notes tab can be offered.
     pub has_notes: bool,
+    /// For a lexicon, what it can be found by: "strong:H" (Strong's Hebrew
+    /// numbers), "strong:G", or "lemma:grc". Empty for a Bible.
+    pub lookups: Vec<String>,
     pub version: String,
     pub file: String,
     /// From the module itself, so covered by its signed file hash.
@@ -264,6 +267,7 @@ pub(crate) fn load_folder<R: Runtime>(
                         abbreviation: module.abbreviation,
                         module_type: module.module_type,
                         has_notes: module.has_notes,
+                        lookups: module.lookups,
                         version: module.version,
                         description: module.description,
                         language: module.language,

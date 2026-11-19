@@ -63,10 +63,14 @@ pub fn check_text(
     manifest: &Manifest,
     pins: &'static [Pin],
 ) -> Result<Option<&'static Pin>> {
-    if manifest.text.tree_version != 1 {
+    let text = manifest
+        .text
+        .as_ref()
+        .ok_or_else(|| ModuleError::Untrusted("its manifest has no text section".into()))?;
+    if text.tree_version != 1 {
         return Err(ModuleError::Unsupported(format!(
             "its text tree version {} isn't supported (this app reads version 1)",
-            manifest.text.tree_version
+            text.tree_version
         )));
     }
 
@@ -78,7 +82,7 @@ pub fn check_text(
         // The file was hashed against the manifest already, and this hash
         // is known to hold the pinned text.
         Some(pin) => {
-            if manifest.text.text_root != pin.text_root {
+            if text.text_root != pin.text_root {
                 return Err(ModuleError::Untrusted(
                     "its manifest gives the wrong text root for its text".into(),
                 ));
@@ -87,8 +91,7 @@ pub fn check_text(
         }
         None => {
             let roots = computed_roots(conn, &sha256)?;
-            if roots.text != manifest.text.text_root || roots.content != manifest.text.content_root
-            {
+            if roots.text != text.text_root || roots.content != text.content_root {
                 return Err(ModuleError::Untrusted(
                     "its text doesn't match the text roots in its manifest, so it may have been altered"
                         .into(),

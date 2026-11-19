@@ -15,6 +15,8 @@ pub fn run() {
         .manage(modules::downloads::CatalogState::default())
         .invoke_handler(tauri::generate_handler![
             modules::commands::module_info,
+            modules::commands::lexicon_lookup,
+            modules::commands::lexicon_entry,
             modules::commands::books,
             modules::commands::book_outline,
             modules::commands::ref_sids,

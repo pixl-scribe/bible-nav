@@ -13,10 +13,15 @@ export interface ModuleSummary {
   name: string;
   /** The short name for tabs and menus, such as "KJV". */
   abbreviation: string;
-  /** "bible", "dictionary", and so on: which menus list it. */
+  /** "bible" or "lexicon": which menus list it. */
   moduleType: string;
   /** Whether it has footnotes, so a Notes tab can be offered. */
   hasNotes: boolean;
+  /**
+   * For a lexicon, what it can be found by: "strong:H" (Strong's Hebrew
+   * numbers), "strong:G", or "lemma:grc". Empty for a Bible.
+   */
+  lookups: string[];
   version: string;
   file: string;
   /** From the module itself, which its signed file hash covers. */

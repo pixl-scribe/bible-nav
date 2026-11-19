@@ -89,6 +89,13 @@ pub fn built_in_module_keys() -> Vec<VerifyingKey> {
         .collect()
 }
 
+/// The development key, for tests that check a module the generator signed
+/// with it, in release test builds too (which don't trust it otherwise).
+#[cfg(test)]
+pub fn development_key() -> VerifyingKey {
+    VerifyingKey::from_bytes(&DEVELOPMENT_KEY).unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -17,6 +17,8 @@ use tauri::State;
 
 use super::db::ModuleDb;
 use super::error::{ModuleError, Result};
+use super::integrity::ModuleKind;
+use super::lexicon::{self, LexiconEntry};
 use super::queries::{self, Book, BookOutline, IndexedVerse, ModuleInfo, RefRange, VerseRow};
 use super::search::{self, WordSuggestion};
 
@@ -67,20 +69,54 @@ impl ModuleRegistry {
 /// window. `query` is a closure: a function value, like an arrow function in
 /// TypeScript. `move` makes it take ownership of what it uses, which Rust
 /// requires before handing it to another thread.
+///
+/// `run` is for Bible queries: a lexicon has none of a Bible's tables, so
+/// asking one for verses is refused plainly instead of failing in SQL.
 async fn run<T, F>(registry: &ModuleRegistry, module_id: &str, query: F) -> Result<T>
 where
     T: Send + 'static,
     F: FnOnce(&Connection) -> Result<T> + Send + 'static,
 {
+    run_kind(registry, module_id, Some(ModuleKind::Bible), query).await
+}
+
+/// Runs a query on a module of the kind `kind`, or of any kind if `None`.
+async fn run_kind<T, F>(
+    registry: &ModuleRegistry,
+    module_id: &str,
+    kind: Option<ModuleKind>,
+    query: F,
+) -> Result<T>
+where
+    T: Send + 'static,
+    F: FnOnce(&Connection) -> Result<T> + Send + 'static,
+{
     let module = registry.get(module_id)?;
+    let module_id = module_id.to_string();
     tauri::async_runtime::spawn_blocking(move || {
         let db = module.lock().map_err(|_| {
             ModuleError::Task("the module is unusable after an earlier failure".into())
         })?;
+        if let Some(kind) = kind {
+            if db.kind() != kind {
+                return Err(ModuleError::Unsupported(format!(
+                    "{module_id} is a {}, not a {}",
+                    kind_name(db.kind()),
+                    kind_name(kind)
+                )));
+            }
+        }
         query(db.conn())
     })
     .await
     .map_err(|error| ModuleError::Task(error.to_string()))?
+}
+
+fn kind_name(kind: ModuleKind) -> &'static str {
+    match kind {
+        ModuleKind::Bible => "Bible",
+        ModuleKind::Lexicon => "lexicon",
+    }
 }
 
 #[tauri::command]
@@ -88,7 +124,55 @@ pub async fn module_info(
     registry: State<'_, ModuleRegistry>,
     module_id: String,
 ) -> Result<ModuleInfo> {
-    run(&registry, &module_id, queries::module_info).await
+    run_kind(&registry, &module_id, None, queries::module_info).await
+}
+
+/// The entries of a lexicon that a Strong's number or lemma leads to.
+/// `kind` is "strong" or "lemma". A Strong's number may be written as the
+/// Bible writes it ("H0430"); it's put in normal form first.
+#[tauri::command]
+pub async fn lexicon_lookup(
+    registry: State<'_, ModuleRegistry>,
+    module_id: String,
+    kind: String,
+    value: String,
+) -> Result<Vec<LexiconEntry>> {
+    let value = match kind.as_str() {
+        "strong" => match lexicon::normalize_strong(&value) {
+            Some(normal) => normal,
+            None => return Ok(Vec::new()),
+        },
+        "lemma" => value,
+        _ => {
+            return Err(ModuleError::Unsupported(format!(
+                "{kind} isn't a kind of lookup"
+            )))
+        }
+    };
+    run_kind(
+        &registry,
+        &module_id,
+        Some(ModuleKind::Lexicon),
+        move |conn| lexicon::lookup(conn, &kind, &value),
+    )
+    .await
+}
+
+/// One lexicon entry by its key, such as "H7218", for a link inside an
+/// entry or the Back button.
+#[tauri::command]
+pub async fn lexicon_entry(
+    registry: State<'_, ModuleRegistry>,
+    module_id: String,
+    key: String,
+) -> Result<Option<LexiconEntry>> {
+    run_kind(
+        &registry,
+        &module_id,
+        Some(ModuleKind::Lexicon),
+        move |conn| lexicon::entry_by_key(conn, &key),
+    )
+    .await
 }
 
 #[tauri::command]

@@ -10,12 +10,21 @@ use std::path::Path;
 use rusqlite::{Connection, OpenFlags};
 
 use super::error::{ModuleError, Result};
-use super::integrity::{self, Manifest, Sidecars};
+use super::integrity::{self, Manifest, ModuleKind, Sidecars};
+use super::lexicon_tree;
 use super::pins;
 use super::trust::{self, Trust};
 
-/// The module format version this app reads (`module.formatVersion`).
+/// The Bible module format version this app reads (`module.formatVersion`).
 pub const SUPPORTED_FORMAT_VERSION: i64 = 2;
+
+/// The lexicon module format version this app reads. Each kind of module
+/// counts its format versions separately
+/// (bible-nav-modules/docs/lexicon-format.md).
+pub const LEXICON_FORMAT_VERSION: i64 = 1;
+
+/// Tables every lexicon module has.
+const LEXICON_TABLES: [&str; 3] = ["module", "entries", "lookups"];
 
 /// Tables every format-2 module has.
 const REQUIRED_TABLES: [&str; 7] = [
@@ -37,6 +46,10 @@ pub struct ModuleDb {
     conn: Connection,
     /// The pinned edition its text matched, if any (`pins.rs`).
     pin: Option<&'static pins::Pin>,
+    kind: ModuleKind,
+    /// For a lexicon, what it can be found by, such as "strong:H", from its
+    /// signed manifest.
+    lookups: Vec<String>,
 }
 
 impl ModuleDb {
@@ -78,10 +91,40 @@ impl ModuleDb {
             | OpenFlags::SQLITE_OPEN_URI
             | OpenFlags::SQLITE_OPEN_NO_MUTEX;
         let conn = Connection::open_with_flags(uri, flags)?;
-        check_format(&conn)?;
-        check_identity(&conn, &manifest)?;
-        let pin = pins::check_text(&conn, &manifest, pins::PINNED_EDITIONS)?;
-        Ok(Self { conn, pin })
+        let kind = manifest.module_kind();
+        let pin = match kind {
+            ModuleKind::Bible => {
+                check_format(&conn)?;
+                check_identity(&conn, &manifest)?;
+                pins::check_text(&conn, &manifest, pins::PINNED_EDITIONS)?
+            }
+            ModuleKind::Lexicon => {
+                check_lexicon_format(&conn)?;
+                check_identity(&conn, &manifest)?;
+                lexicon_tree::check_roots(&conn, &manifest)?;
+                None
+            }
+        };
+        let lookups = manifest
+            .entries
+            .map(|entries| entries.lookups)
+            .unwrap_or_default();
+        Ok(Self {
+            conn,
+            pin,
+            kind,
+            lookups,
+        })
+    }
+
+    /// A Bible or a lexicon.
+    pub fn kind(&self) -> ModuleKind {
+        self.kind
+    }
+
+    /// For a lexicon, what it can be found by, such as "strong:H".
+    pub fn lookups(&self) -> &[String] {
+        &self.lookups
     }
 
     pub fn conn(&self) -> &Connection {
@@ -125,6 +168,37 @@ fn check_format(conn: &Connection) -> Result<()> {
     if version != SUPPORTED_FORMAT_VERSION {
         return Err(ModuleError::Unsupported(format!(
             "format version {version} isn't supported (this app reads version {SUPPORTED_FORMAT_VERSION})"
+        )));
+    }
+    Ok(())
+}
+
+/// Rejects files that aren't lexicon modules of the format this app reads.
+fn check_lexicon_format(conn: &Connection) -> Result<()> {
+    for table in LEXICON_TABLES {
+        let exists: bool = conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)",
+            [table],
+            |row| row.get(0),
+        )?;
+        if !exists {
+            return Err(ModuleError::Unsupported(format!(
+                "the {table} table is missing"
+            )));
+        }
+    }
+    let (version, module_type): (i64, String) =
+        conn.query_row("SELECT formatVersion, moduleType FROM module", [], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?;
+    if module_type != "lexicon" {
+        return Err(ModuleError::Untrusted(format!(
+            "its manifest says it's a lexicon, but the module says it's a {module_type}"
+        )));
+    }
+    if version != LEXICON_FORMAT_VERSION {
+        return Err(ModuleError::Unsupported(format!(
+            "lexicon format version {version} isn't supported (this app reads version {LEXICON_FORMAT_VERSION})"
         )));
     }
     Ok(())
