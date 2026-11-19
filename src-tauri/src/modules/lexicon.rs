@@ -235,6 +235,49 @@ mod tests {
         assert_eq!(found["content"], roots.content.as_str());
     }
 
+    /// The real Strong's Greek module, if bible-nav-modules has generated
+    /// it: its roots must match its manifest, G25's corrected link must
+    /// lead to Strong's Hebrew, and Strong's remark after the renderings
+    /// must be there. Skipped when the export isn't there.
+    #[test]
+    fn opens_the_generated_strongs_greek() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../bible-nav-modules/exports/eng_strongs_grc-1.0.0.db");
+        if !path.exists() {
+            eprintln!("skipped: no eng_strongs_grc export");
+            return;
+        }
+        let db = ModuleDb::open_checked(
+            &path,
+            &sidecars(&path),
+            "eng_strongs_grc-1.0.0.db",
+            &Trust::only(
+                &[
+                    crate::modules::keys::built_in_module_keys(),
+                    vec![crate::modules::keys::development_key()],
+                ]
+                .concat(),
+            ),
+        )
+        .unwrap();
+        assert_eq!(db.lookups(), ["strong:G"]);
+        let agapao = lookup(db.conn(), "strong", &normalize_strong("G0025").unwrap()).unwrap();
+        assert_eq!(agapao.len(), 1);
+        assert!(
+            agapao[0].body.contains(r#""strong":"H5689""#),
+            "{}",
+            agapao[0].body
+        );
+        assert!(!agapao[0].body.contains("G5689"), "{}", agapao[0].body);
+        assert!(
+            agapao[0].body.contains(r#"{"style":"note""#),
+            "{}",
+            agapao[0].body
+        );
+        // A number Strong left unused has no entry.
+        assert!(lookup(db.conn(), "strong", "G3203").unwrap().is_empty());
+    }
+
     /// The real Strong's Hebrew module, if bible-nav-modules has generated
     /// it: the app's own roots must match its manifest, and H7218 must carry
     /// its correction. Skipped when the export isn't there.

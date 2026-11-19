@@ -13,6 +13,7 @@
   import ModuleMessage from './module-message.svelte';
   import LexiconInline from './lexicon-inline.svelte';
   import {
+    defaultLexicon,
     isRtl,
     lexiconsFor,
     lookUp,
@@ -25,6 +26,7 @@
     ParallelPane,
   } from '$lib/services/parallel-pane.svelte';
   import { moduleFolderService } from '$lib/services/module-folder-service.svelte';
+  import { modulesDialogService } from '$lib/services/modules-dialog-service.svelte';
 
   let {
     tab,
@@ -107,7 +109,22 @@
     if (wanted === placeId) alsoIn = found;
   }
 
+  /**
+   * A link inside the entry. Within this lexicon it opens in place, kept for
+   * Back. A number of another language (Strong's Greek's links to Hebrew
+   * numbers) opens in that language's lexicon, as a new start there, or
+   * offers the download when none is installed.
+   */
   function open(place: LexiconPlace) {
+    if (
+      place.kind === 'strong' &&
+      !lexicon?.lookups.includes(`strong:${place.value[0]}`)
+    ) {
+      const other = defaultLexicon(place.value, modules);
+      if (other) pane.openLexicon(other.id, place);
+      else modulesDialogService.open('download');
+      return;
+    }
     pane.openLexicon(tab.moduleId, place, true);
   }
 
