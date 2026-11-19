@@ -23,12 +23,18 @@
     root,
     boundary,
     placement = 'top',
+    selector = '[data-tip]',
+    textOf = (element: HTMLElement) => element.dataset.tip,
   }: {
     /** Where the elements with `data-tip` are. */
     root: HTMLElement | undefined;
     /** What the tooltip stays inside; the window when not given. */
     boundary?: HTMLElement;
     placement?: 'top' | 'bottom' | 'right';
+    /** Which elements have a tooltip, instead of those with `data-tip`. */
+    selector?: string;
+    /** Each one's text, instead of its `data-tip`. */
+    textOf?: (element: HTMLElement) => string | undefined;
   } = $props();
 
   let tooltip = $state<HTMLElement>();
@@ -73,15 +79,16 @@
 
   function show(event: Event) {
     const target = (event.target as Element | null)?.closest<HTMLElement>(
-      '[data-tip]'
+      selector
     );
-    if (!target?.dataset.tip) return;
+    const tip = target && textOf(target);
+    if (!target || !tip) return;
     anchor = target;
-    text = target.dataset.tip;
+    text = tip;
   }
 
   function hideFor(event: Event) {
-    const target = (event.target as Element | null)?.closest('[data-tip]');
+    const target = (event.target as Element | null)?.closest(selector);
     if (target && target === anchor) anchor = undefined;
   }
 

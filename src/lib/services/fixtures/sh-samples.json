@@ -1,0 +1,35 @@
+{
+  "note": "Real rows of eng_strongs_heb 1.0.0 (Open Scriptures' Strong's Hebrew), copied from the module, for tests.",
+  "entries": [
+    {
+      "key": "H113",
+      "headword": "אָדוֹן",
+      "headwordLang": "hbo",
+      "homograph": "",
+      "translit": "ʼâdôwn",
+      "pronunciation": "aw-done'",
+      "allCited": false,
+      "body": "[{\"style\":\"deriv\",\"children\":[\"or (shortened) \",{\"style\":\"word\",\"lang\":\"hbo\",\"pronunciation\":\"aw-done'\",\"translit\":\"ʼâdôn\",\"children\":[\"אָדֹן\"]},\"; from an unused root (meaning to rule);\"]},{\"style\":\"def\",\"children\":[{\"style\":\"em\",\"children\":[\"sovereign\"]},\", i.e. \",{\"style\":\"em\",\"children\":[\"controller\"]},\" (human or divine)\"]},{\"style\":\"kjv\",\"children\":[\"lord, master, owner. Compare also names beginning with 'Adoni-'.\"]}]"
+    },
+    {
+      "key": "H595",
+      "headword": "אָנֹכִי",
+      "headwordLang": "hbo",
+      "homograph": "",
+      "translit": "ʼânôkîy",
+      "pronunciation": "aw-no-kee'",
+      "allCited": false,
+      "body": "[{\"style\":\"deriv\",\"children\":[\"sometimes, \",{\"style\":\"word\",\"lang\":\"hbo\",\"pronunciation\":\"aw-no'-kee\",\"children\":[]},\"; a primitive pronoun;\"]},{\"style\":\"def\",\"children\":[{\"style\":\"em\",\"children\":[\"I\"]}]},{\"style\":\"kjv\",\"children\":[\"I, me, [idiom] which.\"]}]"
+    },
+    {
+      "key": "H7225",
+      "headword": "רֵאשִׁית",
+      "headwordLang": "hbo",
+      "homograph": "",
+      "translit": "rêʼshîyth",
+      "pronunciation": "ray-sheeth'",
+      "allCited": false,
+      "body": "[{\"style\":\"deriv\",\"children\":[\"from the same as \",{\"style\":\"ref\",\"strong\":\"H7218\",\"children\":[\"רֹאשׁ\"]},\";\"]},{\"style\":\"def\",\"children\":[{\"style\":\"em\",\"children\":[\"the first\"]},\", \",{\"style\":\"em\",\"children\":[\"in place\"]},\", \",{\"style\":\"em\",\"children\":[\"time\"]},\", \",{\"style\":\"em\",\"children\":[\"order\"]},\" or \",{\"style\":\"em\",\"children\":[\"rank\"]},\" (specifically, a firstfruit)\"]},{\"style\":\"kjv\",\"children\":[\"beginning, chief(-est), first(-fruits, part, time), principal thing.\"]}]"
+    }
+  ]
+}

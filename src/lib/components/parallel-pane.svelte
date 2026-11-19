@@ -3,7 +3,8 @@
    * A search's parallel pane: box tabs separated by short vertical rules (no
    * tray; the selected tab is a filled box with bold text), a + menu to add
    * tabs, and the selected tab's content. Tabs are parallel texts (another
-   * Bible, following the main text) and modules' Notes tabs.
+   * Bible, following the main text), modules' Notes tabs, and lexicon tabs
+   * (opened from a word, never from +).
    */
   import { Plus, X } from '@lucide/svelte';
   import { _ } from 'svelte-i18n';
@@ -19,6 +20,9 @@
   } from '$lib/services/app-settings-service.svelte';
   import { moduleFolderService } from '$lib/services/module-folder-service.svelte';
   import NotesPanel from './notes-panel.svelte';
+  import LexiconPanel from './lexicon-panel.svelte';
+  import TipTooltip from './tip-tooltip.svelte';
+  import { isRtl } from '$lib/services/lexicon-service';
   import ParallelText from './parallel-text.svelte';
   import ModuleMenu from './module-menu.svelte';
 
@@ -43,8 +47,24 @@
 
   function title(tab: ParallelTab): string {
     const abbr = abbreviationOf(tab.moduleId);
-    return tab.kind === 'notes' ? $_('notes.tab', { values: { abbr } }) : abbr;
+    if (tab.kind === 'notes') return $_('notes.tab', { values: { abbr } });
+    if (tab.kind === 'lexicon') {
+      return `${abbr} · ${tab.place.headword ?? tab.place.value}`;
+    }
+    return abbr;
   }
+
+  /** A lexicon tab's tooltip: the word clicked and its number. */
+  function tip(tab: ParallelTab): string | undefined {
+    if (tab.kind !== 'lexicon' || tab.place.kind !== 'strong') return undefined;
+    return tab.place.word
+      ? $_('lexicon.word-tip', {
+          values: { word: tab.place.word, number: tab.place.value },
+        })
+      : tab.place.value;
+  }
+
+  let tablist = $state<HTMLElement>();
 
   /** The + menu: Bibles as parallel texts, then modules with notes. */
   const sections = $derived(parallelMenuSections(pane, service, modules, $_));
@@ -58,6 +78,7 @@
     class="relative flex items-center gap-1.5 border-b border-base-content/10 p-2"
   >
     <div
+      bind:this={tablist}
       role="tablist"
       aria-label={$_('parallel.tabs')}
       class="flex flex-wrap items-center gap-0.5"
@@ -70,7 +91,15 @@
             role="tab"
             aria-selected={selected}
             class="ptab-label"
-            onclick={() => pane.select(tab.key)}>{title(tab)}</button
+            data-tip={tip(tab)}
+            onclick={() => pane.select(tab.key)}
+            >{#if tab.kind === 'lexicon'}{abbreviationOf(tab.moduleId)} ·
+              <span
+                lang={tab.place.headwordLang}
+                dir={isRtl(tab.place.headwordLang) ? 'rtl' : undefined}
+                class="text-[1.1em] font-normal"
+                >{tab.place.headword ?? tab.place.value}</span
+              >{:else}{title(tab)}{/if}</button
           >
           <button
             type="button"
@@ -98,6 +127,7 @@
     >
       <Plus size={16} />
     </button>
+    <TipTooltip root={tablist} placement="bottom" />
     {#if menuOpen}
       <ModuleMenu
         {sections}
@@ -124,6 +154,10 @@
   {/each}
   {#if pane.active?.kind === 'text'}
     <!-- Shown above, kept loaded so each keeps its place. -->
+  {:else if pane.active?.kind === 'lexicon'}
+    {#key pane.active.key}
+      <LexiconPanel tab={pane.active} {pane} {textMaxWidth} />
+    {/key}
   {:else if pane.active?.kind === 'notes' && service}
     <NotesPanel
       tab={pane.active}

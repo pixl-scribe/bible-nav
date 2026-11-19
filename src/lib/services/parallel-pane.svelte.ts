@@ -1,8 +1,9 @@
 /**
  * The parallel pane beside a search's main text. Each search has at most one,
  * holding any number of tabs: parallel texts (another Bible, following the
- * main text) and modules' Notes tabs. Dictionaries will be another kind.
+ * main text), modules' Notes tabs, and lexicon tabs.
  */
+import type { LexiconPlace } from './lexicon-service';
 
 export interface NotesTab {
   kind: 'notes';
@@ -28,7 +29,34 @@ export interface TextTab {
   startSid: string;
 }
 
-export type ParallelTab = NotesTab | TextTab;
+/**
+ * A lexicon tab: one per lexicon, showing the latest word looked up in it.
+ * It scrolls on its own and doesn't follow the chapter. Back retraces the
+ * links followed inside the lexicon ("from H7218"); a word opened from a
+ * Bible text, or from "Also in", starts afresh (decided 2026-11-18).
+ */
+export interface LexiconTab {
+  kind: 'lexicon';
+  /** One tab per lexicon, so its key is the module id. */
+  key: string;
+  moduleId: string;
+  place: LexiconPlace;
+  /** Earlier places, most recent last. */
+  back: LexiconPlace[];
+}
+
+export type ParallelTab = NotesTab | TextTab | LexiconTab;
+
+/** How many places Back remembers in each lexicon tab. */
+const BACK_LIMIT = 50;
+
+export function lexiconTabKey(moduleId: string): string {
+  return `lexicon:${moduleId}`;
+}
+
+function samePlace(a: LexiconPlace, b: LexiconPlace): boolean {
+  return a.kind === b.kind && a.value === b.value;
+}
 
 export function notesTabKey(moduleId: string): string {
   return `notes:${moduleId}`;
@@ -107,6 +135,47 @@ export class ParallelPane {
     }
     this.activeKey = key;
     this.open = true;
+  }
+
+  /**
+   * Opens a lexicon's tab at `place`, or moves its tab there, and opens the
+   * pane if it's closed. With `followed` (a link inside an entry), the place
+   * it showed is kept for Back; otherwise its history starts afresh.
+   */
+  public openLexicon(
+    moduleId: string,
+    place: LexiconPlace,
+    followed = false
+  ): void {
+    const key = lexiconTabKey(moduleId);
+    const existing = this.tabs.find(
+      (tab): tab is LexiconTab => tab.kind === 'lexicon' && tab.key === key
+    );
+    if (!existing) {
+      this.tabs.push({ kind: 'lexicon', key, moduleId, place, back: [] });
+    } else if (!followed) {
+      // The same entry keeps its loaded headword; another replaces it.
+      existing.place = samePlace(existing.place, place)
+        ? { ...existing.place, word: place.word ?? existing.place.word }
+        : place;
+      existing.back = [];
+    } else if (samePlace(existing.place, place)) {
+      // The same entry again: keep its history, take the newer word.
+      if (place.word) existing.place.word = place.word;
+    } else {
+      existing.back = [...existing.back, existing.place].slice(-BACK_LIMIT);
+      existing.place = place;
+    }
+    this.activeKey = key;
+    this.open = true;
+  }
+
+  /** Goes back to the lexicon tab's previous place, if it has one. */
+  public lexiconBack(key: string): void {
+    const tab = this.tabs.find((t) => t.key === key);
+    if (tab?.kind !== 'lexicon' || tab.back.length === 0) return;
+    tab.place = tab.back[tab.back.length - 1];
+    tab.back = tab.back.slice(0, -1);
   }
 
   /**

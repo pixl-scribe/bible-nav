@@ -10,6 +10,7 @@
   import SearchRow from './search-row.svelte';
   import FootnoteTooltip from './footnote-tooltip.svelte';
   import TipTooltip from './tip-tooltip.svelte';
+  import { normalizeStrong } from '$lib/services/lexicon-service';
   import type { MenuSection } from './module-menu.svelte';
   import {
     appSettingsService,
@@ -75,6 +76,14 @@
   );
   const textMaxWidth = $derived(textMaxWidths[appSettingsService.textWidth]);
   let scrollableElement = $state<HTMLElement | undefined>();
+
+  /** A word's tooltip: the word and its Strong's number, "beginning · H7225". */
+  function wordTip(element: HTMLElement): string | undefined {
+    const number = normalizeStrong(element.dataset.strong ?? '');
+    if (!number) return undefined;
+    const word = element.textContent?.trim() ?? '';
+    return $_('lexicon.word-tip', { values: { word, number } });
+  }
 
   onMount(() => {
     bibleTextService = new BibleTextService(
@@ -588,6 +597,13 @@
     </div>
     <!-- The pane's one shared footnote tooltip, kept inside the pane. -->
     <FootnoteTooltip pane={scrollableElement} />
+    <!-- And one for words with a Strong's number: "beginning · H7225". -->
+    <TipTooltip
+      root={scrollableElement}
+      boundary={scrollableElement}
+      selector="span.word[data-strong]"
+      textOf={wordTip}
+    />
   </div>
 </section>
 

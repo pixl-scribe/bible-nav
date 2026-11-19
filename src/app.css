@@ -3,6 +3,31 @@
     themes: light, dark --default --prefersdark, night, dim, nord, autumn, cupcake, emerald, retro ;
 }
 
+/* The original languages' own fonts (static/fonts/README.md). Each draws
+   only its script's characters, so they lead the font list and everything
+   else falls through to the usual system font. */
+@font-face {
+    font-family: "Ezra SIL";
+    src: url("/fonts/ezra-sil/SILEOT.woff") format("woff");
+    /* Hebrew, its presentation forms, and the combining grapheme joiner the
+       Westminster Leningrad Codex uses between marks. */
+    unicode-range: U+0590-05FF, U+FB1D-FB4F, U+034F;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Gentium Book";
+    src: url("/fonts/gentium-book/GentiumBook-Regular.woff2") format("woff2");
+    /* Greek and its combining accents. */
+    unicode-range: U+0300-036F, U+0370-03FF, U+1F00-1FFF;
+    font-display: swap;
+}
+
+@theme {
+    --font-sans: "Ezra SIL", "Gentium Book", ui-sans-serif, system-ui, sans-serif,
+        "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
 /* The selected verse and its note, in the main pane and the Notes tab. They
    always change together, so they share one look: a fill, which also wraps
    cleanly with inline verse text (an outline would box each line). */
@@ -19,4 +44,21 @@ span.bd {
 
 span.it {
     font-style: italic;
+}
+
+/* A word with a Strong's number: plain until hovered, then a dotted
+   underline (decided 2026-11-17) in the primary colour, marking it as a
+   link while the word keeps its own colour (2026-11-18). A click opens its
+   lexicon entry; the word whose entry is open keeps a soft fill. */
+span.word[data-strong]:hover {
+    text-decoration: underline dotted var(--color-primary);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.2em;
+    cursor: pointer;
+}
+
+span.word.word-open {
+    border-radius: 0.2rem;
+    background-color: color-mix(in oklab, var(--color-primary) 25%, transparent);
+    box-shadow: inset 0 -2px 0 var(--color-primary);
 }

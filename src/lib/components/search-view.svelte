@@ -16,6 +16,11 @@
   import { moduleFolderService } from '$lib/services/module-folder-service.svelte';
   import BibleText from './bible-text.svelte';
   import ParallelPane from './parallel-pane.svelte';
+  import LexiconMissing from './lexicon-missing.svelte';
+  import {
+    defaultLexicon,
+    normalizeStrong,
+  } from '$lib/services/lexicon-service';
 
   let {
     tab,
@@ -38,6 +43,12 @@
 
   let service = $state<BibleTextService | undefined>();
   let element = $state<HTMLElement>();
+  /** A clicked word whose language has no lexicon installed. */
+  let missing = $state<
+    { anchor: HTMLElement; word: string; strong: string } | undefined
+  >();
+  /** The word whose entry was opened last, which keeps a soft fill. */
+  let openWord: HTMLElement | undefined;
 
   // While the parallel pane has no tabs, the Parallel button offers what
   // can open in it, instead of opening an empty pane.
@@ -86,6 +97,43 @@
     element.addEventListener(FOOTNOTE_OPEN_EVENT, onOpen);
     return () => element?.removeEventListener(FOOTNOTE_OPEN_EVENT, onOpen);
   });
+
+  // A word with a Strong's number, clicked in either pane, opens its entry
+  // in a lexicon tab. One listener serves every word. A drag that selected
+  // text opens nothing (decided 2026-11-17).
+  $effect(() => {
+    if (!element) return;
+    const onClick = (event: MouseEvent) => {
+      if (event.button !== 0) return;
+      const target = (event.target as Element | null)?.closest<HTMLElement>(
+        'span.word[data-strong]'
+      );
+      if (!target) return;
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed) return;
+      const strong = normalizeStrong(target.dataset.strong ?? '');
+      if (!strong) return;
+      const word = target.textContent?.trim() ?? '';
+      const lexicon = defaultLexicon(
+        strong,
+        moduleFolderService.status?.modules ?? []
+      );
+      if (!lexicon) {
+        missing = { anchor: target, word, strong };
+        return;
+      }
+      openWord?.classList.remove('word-open');
+      target.classList.add('word-open');
+      openWord = target;
+      tab.parallel.openLexicon(lexicon.id, {
+        kind: 'strong',
+        value: strong,
+        word,
+      });
+    };
+    element.addEventListener('click', onClick);
+    return () => element?.removeEventListener('click', onClick);
+  });
 </script>
 
 <div
@@ -108,3 +156,6 @@
     <ParallelPane pane={tab.parallel} {service} />
   {/if}
 </div>
+{#if missing}
+  <LexiconMissing {...missing} onclose={() => (missing = undefined)} />
+{/if}
