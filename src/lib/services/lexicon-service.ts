@@ -37,9 +37,13 @@ function toEntry(row: LexiconEntryRow): LexiconEntry {
   return { ...row, body: JSON.parse(row.body) as LexiconItem[] };
 }
 
-/** What a lexicon tab shows: the entries a Strong's number leads to, or one entry by key. */
+/**
+ * What a lexicon tab shows: the entries a Strong's number leads to, the
+ * entries with a headword (a lemma: Liddell and Scott's links to every
+ * homograph), or one entry by key.
+ */
 export interface LexiconPlace {
-  kind: 'strong' | 'key';
+  kind: 'strong' | 'lemma' | 'key';
   value: string;
   /** The Bible's word that was clicked, such as "beginning", if any. */
   word?: string;
@@ -61,7 +65,7 @@ export async function lookUp(
   }
   const rows = await invoke<LexiconEntryRow[]>('lexicon_lookup', {
     moduleId,
-    kind: 'strong',
+    kind: place.kind,
     value: place.value,
   });
   return rows.map(toEntry);
@@ -76,6 +80,22 @@ export function normalizeStrong(raw: string): string | undefined {
   const match = /^([HGhg])0*([1-9]\d*)([A-Za-z]?)$/.exec(raw.trim());
   if (!match) return undefined;
   return `${match[1].toUpperCase()}${match[2]}${match[3].toLowerCase()}`;
+}
+
+/**
+ * Whether an entry is laid out in numbered senses (Liddell and Scott)
+ * rather than Strong's sections: its own text then says "from ...", so it
+ * gets no section headings.
+ */
+export function hasSenses(entry: LexiconEntry): boolean {
+  return entry.body.some(
+    (item) => typeof item !== 'string' && item.style === 'sense'
+  );
+}
+
+/** A key that is a Strong's number (shown); other keys are internal ids. */
+export function isStrongKey(key: string): boolean {
+  return /^[HG][1-9]\d*[a-z]?$/.test(key);
 }
 
 /** Languages written right to left. */

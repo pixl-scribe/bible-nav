@@ -12,6 +12,8 @@ import type {
   LexiconItem,
 } from '$lib/services/lexicon-service';
 import samples from '$lib/services/fixtures/sh-samples.json';
+import lsSamples from '$lib/services/fixtures/ls-samples.json';
+import type { LexiconPlace } from '$lib/services/lexicon-service';
 
 function body(key: string): LexiconElement[] {
   const entry = samples.entries.find((e) => e.key === key);
@@ -76,5 +78,45 @@ describe('lexicon entries', () => {
     expect(visibleText(show(part('H595', 'deriv')))).toBe(
       "sometimes, aw-no'-kee; a primitive pronoun;"
     );
+  });
+});
+
+/** Liddell and Scott: real entries from the generated module. */
+describe('Liddell and Scott entries', () => {
+  const lsBody = (key: string): LexiconElement[] => {
+    const entry = lsSamples.entries.find((e) => e.key === key);
+    if (!entry) throw new Error(key);
+    return JSON.parse(entry.body) as LexiconElement[];
+  };
+
+  test('every part reads exactly as stored', () => {
+    for (const entry of lsSamples.entries) {
+      for (const part of JSON.parse(entry.body) as LexiconElement[]) {
+        expect(visibleText(show(part.children))).toBe(
+          storedText(part.children)
+        );
+      }
+    }
+  });
+
+  test('translations are in italics, and "Id." names its author', () => {
+    const sense = lsBody('n105').find((p) => p.style === 'sense');
+    const html = show(sense?.children ?? []);
+    expect(html).toContain('<em class="lexicon-tr">');
+    // Svelte's comment markers may sit around the text inside the <abbr>.
+    expect(html).toMatch(
+      /<abbr[^>]*title="Plat\."[^>]*>(?:<!--[^>]*-->)*Id\.(?:<!--[^>]*-->)*<\/abbr>/
+    );
+  });
+
+  test('a link by headword opens every entry with that headword', () => {
+    const items = lsBody('n15674')[0].children;
+    const opened: LexiconPlace[] = [];
+    const html = render(LexiconInline, {
+      props: { items, onOpen: (place: LexiconPlace) => opened.push(place) },
+    }).body;
+    expect(html).toMatch(/<button[^>]*class="lexicon-ref/);
+    const ref = items.find((i) => typeof i !== 'string') as LexiconElement;
+    expect(ref.lemma).toBe(storedText(ref.children));
   });
 });

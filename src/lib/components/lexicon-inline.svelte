@@ -5,7 +5,9 @@
    * joined exactly as stored, so the template has no whitespace between
    * elements: line breaks fall inside tags, as Prettier writes them
    * (lexicon-rendering.test.ts checks the drawn text). A link to another entry opens it in
-   * the same tab (`onOpen`). Styles not listed here show their content.
+   * the same tab (`onOpen`); a link by headword (`lemma`) opens every entry
+   * with that headword. A translation (`tr`) is in italics, as Liddell and
+   * Scott print it. Styles not listed here show their content.
    */
   import type {
     LexiconItem,
@@ -28,14 +30,17 @@
   function open(item: LexiconItem) {
     const strong = attr(item, 'strong');
     const key = attr(item, 'key');
+    const lemma = attr(item, 'lemma');
     if (strong) onOpen({ kind: 'strong', value: strong });
     else if (key) onOpen({ kind: 'key', value: key });
+    else if (lemma) onOpen({ kind: 'lemma', value: lemma });
   }
 
-  /** The language of a link's word, from its Strong's number. */
+  /** The language of a link's word: from its Strong's number, or Greek (Liddell and Scott). */
   function refLang(item: LexiconItem): string | undefined {
     const strong = attr(item, 'strong');
-    if (!strong) return undefined;
+    if (!strong)
+      return attr(item, 'key') || attr(item, 'lemma') ? 'grc' : undefined;
     return strong.startsWith('G') ? 'grc' : 'hbo';
   }
 
@@ -49,8 +54,9 @@
 
 {#each items as item, index (index)}{#if typeof item === 'string'}{item}{:else if item.style === 'em'}<em
       ><LexiconInline items={item.children} {onOpen} /></em
-    >{:else if item.style === 'strong' || item.style === 'tr'}<strong
-      class="font-semibold"
+    >{:else if item.style === 'tr'}<em class="lexicon-tr"
+      ><LexiconInline items={item.children} {onOpen} /></em
+    >{:else if item.style === 'strong'}<strong class="font-semibold"
       ><LexiconInline items={item.children} {onOpen} /></strong
     >{:else if item.style === 'sup'}<sup
       ><LexiconInline items={item.children} {onOpen} /></sup
@@ -68,8 +74,9 @@
       type="button"
       class="lexicon-ref"
       onclick={() => open(item)}
-      ><span class="text-xs font-semibold">{attr(item, 'strong') ?? ''}</span>
-      <span
+      >{#if attr(item, 'strong')}<span class="text-xs font-semibold"
+          >{`${attr(item, 'strong')} `}</span
+        >{/if}<span
         lang={refLang(item)}
         dir={isRtl(refLang(item)) ? 'rtl' : undefined}
         class="original"><LexiconInline items={item.children} {onOpen} /></span

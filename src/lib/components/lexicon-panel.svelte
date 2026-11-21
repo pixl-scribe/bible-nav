@@ -14,7 +14,9 @@
   import LexiconInline from './lexicon-inline.svelte';
   import {
     defaultLexicon,
+    hasSenses,
     isRtl,
+    isStrongKey,
     lexiconsFor,
     lookUp,
     type LexiconElement,
@@ -197,9 +199,17 @@
                   ></span
                 >
               {/if}
-              <span class="text-xs text-base-content/60">
-                {entry.homograph ? `${entry.homograph} ` : ''}{entry.key}
-              </span>
+              <!-- A Strong's number means something to a reader; other keys
+                   (Perseus's "n105") are internal ids. -->
+              {#if entry.homograph || isStrongKey(entry.key)}
+                <span class="text-xs text-base-content/60">
+                  {entry.homograph ? `${entry.homograph} ` : ''}{isStrongKey(
+                    entry.key
+                  )
+                    ? entry.key
+                    : ''}
+                </span>
+              {/if}
               {#if alsoIn.length > 0 && entry === entries[0]}
                 <nav
                   aria-label={$_('lexicon.also-in-label')}
@@ -233,8 +243,14 @@
           </header>
 
           {#each parts(entry) as part, index (index)}
-            <section class="flex flex-col gap-1">
-              {#if SECTIONS[part.style]}
+            <!-- Liddell and Scott's senses are numbered, a deeper level
+                 indented; their entries need no section headings. -->
+            <section
+              class="flex flex-col gap-1"
+              class:ps-5={part.style === 'sense' && part.level === '3'}
+              class:ps-10={part.style === 'sense' && Number(part.level) >= 4}
+            >
+              {#if SECTIONS[part.style] && !hasSenses(entry)}
                 <h3
                   class="m-0 text-[0.6875rem] tracking-wider text-base-content/60 uppercase"
                 >

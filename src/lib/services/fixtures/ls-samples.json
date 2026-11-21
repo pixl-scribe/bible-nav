@@ -1,0 +1,35 @@
+{
+ "source": "bible-nav-modules/exports/eng_middle_liddell-1.0.0.db (generated 2026-11-21)",
+ "entries": [
+  {
+   "key": "n105",
+   "headword": "ἀγαπάω",
+   "headwordLang": "grc",
+   "homograph": "",
+   "translit": "",
+   "pronunciation": "",
+   "allCited": false,
+   "body": "[{\"style\":\"deriv\",\"children\":[{\"style\":\"ref\",\"key\":\"n108\",\"children\":[\"ἀγάπη\"]}]},{\"style\":\"sense\",\"level\":\"2\",\"n\":\"I\",\"children\":[\"of persons, \",{\"style\":\"tr\",\"children\":[\"to treat with affection, to caress, love, be fond of\"]},\", c. acc., attic for \",{\"style\":\"foreign\",\"lang\":\"grc\",\"children\":[\"ἀγαπάζω\"]},\", \",{\"style\":\"usg\",\"children\":[\"Plat.\"]},\", etc.; Pass. \",{\"style\":\"tr\",\"children\":[\"to be beloved\"]},\", \",{\"style\":\"usg\",\"title\":\"Plat.\",\"children\":[\"Id.\"]},\", \",{\"style\":\"usg\",\"children\":[\"Dem.\"]}]},{\"style\":\"sense\",\"level\":\"3\",\"n\":\"2\",\"children\":[\"in \",{\"style\":\"usg\",\"children\":[\"NTest.\"]},\" \",{\"style\":\"tr\",\"children\":[\"to regard with brotherly love\"]},\", v. \",{\"style\":\"foreign\",\"lang\":\"grc\",\"children\":[\"ἀγαπή\"]},\".\"]},{\"style\":\"sense\",\"level\":\"2\",\"n\":\"II\",\"children\":[\"of things, \",{\"style\":\"tr\",\"children\":[\"to be well pleased\"]},\" or \",{\"style\":\"tr\",\"children\":[\"contented at\"]},\" or \",{\"style\":\"tr\",\"children\":[\"with\"]},\" a thing, c. dat., \",{\"style\":\"usg\",\"children\":[\"Dem.\"]},\", etc.; also c. acc. rei, \",{\"style\":\"usg\",\"title\":\"Dem.\",\"children\":[\"Id.\"]},\"; absol. \",{\"style\":\"tr\",\"children\":[\"to be content\"]},\", \",{\"style\":\"usg\",\"children\":[\"Luc.\"]},\": —\",{\"style\":\"foreign\",\"lang\":\"grc\",\"children\":[\"ἀγ. ὅτι.., εἰ.., ἐὰν..\"]},\", \",{\"style\":\"tr\",\"children\":[\"to be well pleased\"]},\" that . . ., \",{\"style\":\"usg\",\"children\":[\"Thuc.\"]},\", etc.\"]}]"
+  },
+  {
+   "key": "n2355.1",
+   "headword": "ἀναμολεῖν",
+   "headwordLang": "grc",
+   "homograph": "",
+   "translit": "",
+   "pronunciation": "",
+   "allCited": false,
+   "body": "[{\"style\":\"form\",\"children\":[\"ἀνα-μολεῖν,\"]},{\"style\":\"sense\",\"children\":[\"inf. of \",{\"style\":\"foreign\",\"lang\":\"grc\",\"children\":[\"ἀν-έμολον\"]},\", aor. 2 of \",{\"style\":\"foreign\",\"lang\":\"grc\",\"children\":[\"ἀναβλώσκω\"]},\", \",{\"style\":\"tr\",\"children\":[\"to go through\"]},\", c. acc., \",{\"style\":\"usg\",\"children\":[\"Eur.\"]}]}]"
+  },
+  {
+   "key": "n15674",
+   "headword": "ἰαχή",
+   "headwordLang": "grc",
+   "homograph": "2",
+   "translit": "",
+   "pronunciation": "",
+   "allCited": false,
+   "body": "[{\"style\":\"deriv\",\"children\":[\"v. \",{\"style\":\"ref\",\"lemma\":\"ἰαχή\",\"children\":[\"ἰαχή\"]}]}]"
+  }
+ ]
+}

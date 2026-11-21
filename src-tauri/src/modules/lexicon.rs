@@ -311,6 +311,50 @@ mod tests {
         assert_eq!(rosh[0].translit, "rôʼsh");
     }
 
+    /// The real Liddell and Scott module, if bible-nav-modules has generated
+    /// it: the app's own roots must match its manifest (the first lexicon
+    /// with lemma lookups, inflected forms and keys such as "n2355.1"), a
+    /// Strong's number must find its entry, and a form named in an entry
+    /// must find that entry. Skipped when the export isn't there.
+    #[test]
+    fn opens_the_generated_middle_liddell() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../bible-nav-modules/exports/eng_middle_liddell-1.0.0.db");
+        if !path.exists() {
+            eprintln!("skipped: no eng_middle_liddell export");
+            return;
+        }
+        let db = ModuleDb::open_checked(
+            &path,
+            &sidecars(&path),
+            "eng_middle_liddell-1.0.0.db",
+            &Trust::only(
+                &[
+                    crate::modules::keys::built_in_module_keys(),
+                    vec![crate::modules::keys::development_key()],
+                ]
+                .concat(),
+            ),
+        )
+        .unwrap();
+        assert_eq!(db.lookups(), ["lemma:grc", "strong:G"]);
+        // G25 (agapao) is entry n105.
+        let agapao = lookup(db.conn(), "strong", "G25").unwrap();
+        assert_eq!(agapao.len(), 1);
+        assert_eq!(agapao[0].key, "n105");
+        // "anablosko" and "anemolon" are forms named in ana-molein, an entry
+        // added from the print.
+        for form in [
+            "\u{1f00}\u{3bd}\u{3b1}\u{3b2}\u{3bb}\u{3ce}\u{3c3}\u{3ba}\u{3c9}",
+            "\u{1f00}\u{3bd}\u{3ad}\u{3bc}\u{3bf}\u{3bb}\u{3bf}\u{3bd}",
+        ] {
+            let found = lookup(db.conn(), "lemma", form).unwrap();
+            assert_eq!(found.len(), 1, "{form}");
+            assert_eq!(found[0].key, "n2355.1");
+        }
+        assert!(entry_by_key(db.conn(), "n8417.1").unwrap().is_some());
+    }
+
     #[test]
     fn strong_numbers_have_one_normal_form() {
         // The same cases as the generator's strong-number.test.ts.
