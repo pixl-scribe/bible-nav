@@ -356,6 +356,52 @@ mod tests {
     }
 
     #[test]
+    fn opens_the_generated_bdb() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../bible-nav-modules/exports/eng_bdb-1.0.0.db");
+        if !path.exists() {
+            eprintln!("skipped: no eng_bdb export");
+            return;
+        }
+        // Opening it computes both roots of the lexicon tree and compares
+        // them with the manifest's.
+        let db = ModuleDb::open_checked(
+            &path,
+            &sidecars(&path),
+            "eng_bdb-1.0.0.db",
+            &Trust::only(
+                &[
+                    crate::modules::keys::built_in_module_keys(),
+                    vec![crate::modules::keys::development_key()],
+                ]
+                .concat(),
+            ),
+        )
+        .unwrap();
+        // Found by Strong's numbers only: no lemma lookups for Hebrew yet.
+        assert_eq!(db.lookups(), ["strong:H"]);
+        // H123 (Edom) is BDB00139 alone; H122 (red) also reaches the red
+        // stew of Gn 25:30 (BDB00138), as Open Scriptures' index places it.
+        let edom = lookup(db.conn(), "strong", "H123").unwrap();
+        assert_eq!(
+            edom.iter().map(|e| e.key.as_str()).collect::<Vec<_>>(),
+            ["BDB00139"]
+        );
+        let red = lookup(db.conn(), "strong", "H122").unwrap();
+        assert!(red.iter().any(|e| e.key == "BDB00138"));
+        // The headword line and a misprinted reference, as stored.
+        let fight = entry_by_key(db.conn(), "BDB04901").unwrap().unwrap();
+        assert_eq!(fight.homograph, "I.");
+        assert!(fight
+            .body
+            .starts_with(r#"[{"style":"hwline","brackets":"first","count":"171""#));
+        let seek = entry_by_key(db.conn(), "BDB02244").unwrap().unwrap();
+        assert!(seek.body.contains(
+            r#"{"style":"bref","meant":"ISA 58:2","sid":"ISA 55:2","children":["Is 55:2"]}"#
+        ));
+    }
+
+    #[test]
     fn strong_numbers_have_one_normal_form() {
         // The same cases as the generator's strong-number.test.ts.
         for (raw, normal) in [

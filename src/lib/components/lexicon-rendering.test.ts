@@ -13,6 +13,12 @@ import type {
 } from '$lib/services/lexicon-service';
 import samples from '$lib/services/fixtures/sh-samples.json';
 import lsSamples from '$lib/services/fixtures/ls-samples.json';
+import bdbSamples from '$lib/services/fixtures/bdb-samples.json';
+import {
+  entryBlocks,
+  headwordLine,
+  type LexiconEntry,
+} from '$lib/services/lexicon-service';
 import type { LexiconPlace } from '$lib/services/lexicon-service';
 
 function body(key: string): LexiconElement[] {
@@ -118,5 +124,86 @@ describe('Liddell and Scott entries', () => {
     expect(html).toMatch(/<button[^>]*class="lexicon-ref/);
     const ref = items.find((i) => typeof i !== 'string') as LexiconElement;
     expect(ref.lemma).toBe(storedText(ref.children));
+  });
+});
+
+describe('Brown-Driver-Briggs', () => {
+  const bdb = (key: string): LexiconEntry => {
+    const row = bdbSamples.entries.find((e) => e.key === key);
+    if (!row) throw new Error(key);
+    return { ...row, body: JSON.parse(row.body) as LexiconItem[] };
+  };
+  const showBdb = (
+    items: LexiconItem[],
+    describe = (sid: string, meant: string | undefined) =>
+      meant ? `meant ${meant}` : `go ${sid}`
+  ) =>
+    render(LexiconInline, {
+      props: { items, onOpen: () => {}, describeRef: describe },
+    }).body;
+
+  test('every part reads exactly as stored', () => {
+    for (const row of bdbSamples.entries) {
+      for (const block of entryBlocks(bdb(row.key))) {
+        expect(visibleText(showBdb(block.text))).toBe(storedText(block.text));
+      }
+    }
+  });
+
+  test('a number or stem is shown with the text that follows it', () => {
+    const blocks = entryBlocks(bdb('BDB04901'));
+    const qal = blocks.find((b) => b.part.stem === 'Qal');
+    expect(qal?.part.allCited).toBe('1');
+    expect(storedText(qal?.text ?? []).startsWith('(poet.) only Imv.')).toBe(
+      true
+    );
+    const niph = blocks.find((b) => b.part.stem === 'Niph.');
+    expect(niph?.part.count).toBe('167');
+    // No block is left empty when text follows it.
+    expect(blocks.every((b) => b.text.length > 0)).toBe(true);
+  });
+
+  test('depth is counted from the outermost senses', () => {
+    const blocks = entryBlocks(bdb('BDB02244'));
+    expect(blocks[0].indent).toBe(0);
+    expect(Math.max(...blocks.map((b) => b.indent))).toBeGreaterThan(0);
+    expect(blocks.every((b) => b.indent <= 3)).toBe(true);
+  });
+
+  test('the headword line: brackets, count, double dagger, other spellings', () => {
+    expect(headwordLine(bdb('BDB04901'))).toMatchObject({
+      peculiar: false,
+      brackets: 'first',
+      count: '171',
+    });
+    expect(headwordLine(bdb('BDBA0011'))).toMatchObject({
+      peculiar: true,
+      brackets: 'first',
+    });
+    const six = headwordLine(bdb('BDB09984'));
+    expect(six?.variants).toHaveLength(1);
+    expect(six?.variants[0].count).toBe('216');
+    // The headword line is drawn with the headword, not as a part.
+    expect(
+      entryBlocks(bdb('BDB09984')).some((b) => b.part.style === 'hwline')
+    ).toBe(false);
+  });
+
+  test('a misprinted reference is shown as printed and leads to the verse meant', () => {
+    const block = entryBlocks(bdb('BDB02244')).find((b) =>
+      storedText(b.text).includes('Is 55:2')
+    );
+    const html = showBdb(block?.text ?? []);
+    expect(html).toMatch(
+      /lexicon-bref-meant" title="meant ISA 58:2">(?:<!--[^>]*-->)*Is 55:2</
+    );
+    expect(html).toMatch(/class="lexicon-bref[^"]*" title="go [A-Z0-9]+ \d+/);
+  });
+
+  test('line breaks and large type are drawn', () => {
+    const items = entryBlocks(bdb('BDB00262')).flatMap((b) => b.text);
+    const html = showBdb(items);
+    expect(html).toContain('<br/>');
+    expect(html).toContain('class="lexicon-big');
   });
 });

@@ -7,7 +7,9 @@
    * (lexicon-rendering.test.ts checks the drawn text). A link to another entry opens it in
    * the same tab (`onOpen`); a link by headword (`lemma`) opens every entry
    * with that headword. A translation (`tr`) is in italics, as Liddell and
-   * Scott print it. Styles not listed here show their content.
+   * Scott print it. A scripture reference (BDB's `bref`) takes the main
+   * text there (`onVerse`): to the verse meant, where BDB misprinted the
+   * number. Styles not listed here show their content.
    */
   import type {
     LexiconItem,
@@ -19,9 +21,15 @@
   let {
     items,
     onOpen,
+    onVerse,
+    describeRef,
   }: {
     items: LexiconItem[];
     onOpen: (place: LexiconPlace) => void;
+    /** Takes the main text to a scripture reference (BDB's `bref`). */
+    onVerse?: (sid: string) => void;
+    /** The hover text of a scripture reference. */
+    describeRef?: (sid: string, meant: string | undefined) => string;
   } = $props();
 
   const attr = (item: LexiconItem, name: string): string | undefined =>
@@ -53,23 +61,78 @@
 </script>
 
 {#each items as item, index (index)}{#if typeof item === 'string'}{item}{:else if item.style === 'em'}<em
-      ><LexiconInline items={item.children} {onOpen} /></em
+      ><LexiconInline
+        items={item.children}
+        {onOpen}
+        {onVerse}
+        {describeRef}
+      /></em
     >{:else if item.style === 'tr'}<em class="lexicon-tr"
-      ><LexiconInline items={item.children} {onOpen} /></em
+      ><LexiconInline
+        items={item.children}
+        {onOpen}
+        {onVerse}
+        {describeRef}
+      /></em
     >{:else if item.style === 'strong'}<strong class="font-semibold"
-      ><LexiconInline items={item.children} {onOpen} /></strong
-    >{:else if item.style === 'sup'}<sup
-      ><LexiconInline items={item.children} {onOpen} /></sup
+      ><LexiconInline
+        items={item.children}
+        {onOpen}
+        {onVerse}
+        {describeRef}
+      /></strong
+    >{:else if item.style === 'big'}<span class="lexicon-big"
+      ><LexiconInline
+        items={item.children}
+        {onOpen}
+        {onVerse}
+        {describeRef}
+      /></span
+    >{:else if item.style === 'br'}<br />{:else if item.style === 'sup'}<sup
+      ><LexiconInline
+        items={item.children}
+        {onOpen}
+        {onVerse}
+        {describeRef}
+      /></sup
     >{:else if item.style === 'sub'}<sub
-      ><LexiconInline items={item.children} {onOpen} /></sub
+      ><LexiconInline
+        items={item.children}
+        {onOpen}
+        {onVerse}
+        {describeRef}
+      /></sub
     >{:else if item.style === 'usg'}<abbr
       class="text-base-content/70 no-underline"
       title={attr(item, 'title')}
-      ><LexiconInline items={item.children} {onOpen} /></abbr
+      ><LexiconInline
+        items={item.children}
+        {onOpen}
+        {onVerse}
+        {describeRef}
+      /></abbr
+    >{:else if item.style === 'bref'}<button
+      type="button"
+      class="lexicon-bref"
+      class:lexicon-bref-meant={attr(item, 'meant')}
+      title={describeRef?.(attr(item, 'sid') ?? '', attr(item, 'meant'))}
+      onclick={() => onVerse?.(attr(item, 'meant') ?? attr(item, 'sid') ?? '')}
+      ><LexiconInline
+        items={item.children}
+        {onOpen}
+        {onVerse}
+        {describeRef}
+      /></button
     >{:else if item.style === 'foreign'}<span
       lang={attr(item, 'lang')}
       dir={isRtl(attr(item, 'lang')) ? 'rtl' : undefined}
-      class="original"><LexiconInline items={item.children} {onOpen} /></span
+      class="original"
+      ><LexiconInline
+        items={item.children}
+        {onOpen}
+        {onVerse}
+        {describeRef}
+      /></span
     >{:else if item.style === 'ref'}<button
       type="button"
       class="lexicon-ref"
@@ -85,9 +148,16 @@
       lang={attr(item, 'lang')}
       dir={isRtl(attr(item, 'lang')) ? 'rtl' : undefined}
       class="original"><LexiconInline items={item.children} {onOpen} /></span
-    >{#if sounds(item)}{item.children.length ? ' ' : ''}<span
+    >{#if attr(item, 'count')}<sub class="lexicon-count"
+        >{attr(item, 'count')}</sub
+      >{/if}{#if sounds(item)}{item.children.length ? ' ' : ''}<span
         class="text-base-content/70">{sounds(item)}</span
-      >{/if}{:else}<LexiconInline items={item.children} {onOpen} />{/if}{/each}
+      >{/if}{:else}<LexiconInline
+      items={item.children}
+      {onOpen}
+      {onVerse}
+      {describeRef}
+    />{/if}{/each}
 
 <style>
   .original {
@@ -111,5 +181,30 @@
   }
   .lexicon-ref .original {
     color: var(--color-base-content);
+  }
+  /* A scripture reference: a quiet link, as there are thousands. */
+  .lexicon-bref {
+    display: inline;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-primary);
+    font: inherit;
+    line-height: inherit;
+    cursor: pointer;
+  }
+  .lexicon-bref:hover {
+    text-decoration: underline;
+  }
+  /* BDB misprinted the number: shown as printed, linked to the verse meant. */
+  .lexicon-bref-meant {
+    text-decoration: underline dotted;
+  }
+  .lexicon-big {
+    font-size: 1.25em;
+  }
+  .lexicon-count {
+    margin-inline-start: 0.15em;
+    color: color-mix(in oklab, var(--color-base-content) 60%, transparent);
   }
 </style>

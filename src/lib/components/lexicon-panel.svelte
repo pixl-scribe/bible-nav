@@ -19,7 +19,6 @@
     isStrongKey,
     lexiconsFor,
     lookUp,
-    type LexiconElement,
     type LexiconEntry,
     type LexiconPlace,
   } from '$lib/services/lexicon-service';
@@ -29,15 +28,24 @@
   } from '$lib/services/parallel-pane.svelte';
   import { moduleFolderService } from '$lib/services/module-folder-service.svelte';
   import { modulesDialogService } from '$lib/services/modules-dialog-service.svelte';
+  import type BibleTextService from '$lib/services/bible-text-service.svelte';
+  import {
+    entryBlocks,
+    headwordLine,
+    type LexiconItem,
+  } from '$lib/services/lexicon-service';
 
   let {
     tab,
     pane,
     textMaxWidth,
+    service,
   }: {
     tab: LexiconTab;
     pane: ParallelPane;
     textMaxWidth: string;
+    /** The main pane's text, which scripture references take the reader to. */
+    service?: BibleTextService;
   } = $props();
 
   let entries = $state<LexiconEntry[]>([]);
@@ -62,11 +70,6 @@
     kjv: 'lexicon.kjv',
     etym: 'lexicon.etymology',
   };
-
-  const parts = (entry: LexiconEntry) =>
-    entry.body.filter(
-      (item): item is LexiconElement => typeof item !== 'string'
-    );
 
   // Load the place's entries whenever the tab moves to another place.
   $effect(() => {
@@ -130,6 +133,31 @@
     pane.openLexicon(tab.moduleId, place, true);
   }
 
+  /**
+   * A scripture reference: the main text goes there (a chapter's verse 1),
+   * as from the reference picker, with the search box emptied.
+   */
+  function goToVerse(sid: string) {
+    if (!service || !sid) return;
+    service.goToReference(sid.includes(':') ? sid : `${sid}:1`);
+  }
+
+  /** A reference's hover text, naming the verse (or the verse meant). */
+  function describeRef(sid: string, meant: string | undefined): string {
+    const name = (s: string) =>
+      service?.formatRefFromSid(s.includes(':') ? s : `${s}:1`) || s;
+    return meant
+      ? $_('lexicon.ref-meant', { values: { meant: name(meant) } })
+      : $_('lexicon.ref', { values: { verse: name(sid) } });
+  }
+
+  /** Between the spellings on BDB's headword line. */
+  const SPELLING_SEPARATOR = ', ';
+
+  /** The text of a word element (an other spelling on the headword line). */
+  const textOf = (items: LexiconItem[]) =>
+    items.map((item) => (typeof item === 'string' ? item : '')).join('');
+
   async function back() {
     pane.lexiconBack(tab.key);
     // Back disappears when there's nothing before; keep focus in the tab.
@@ -183,6 +211,7 @@
       </p>
     {:else}
       {#each entries as entry (entry.key)}
+        {@const line = headwordLine(entry)}
         <article class="flex flex-col gap-4">
           <header class="flex items-start justify-between gap-3">
             <div class="flex flex-col gap-1 pt-2">
@@ -233,22 +262,55 @@
                 </nav>
               {/if}
             </div>
+            <!-- BDB's headword line: ‡ (only in Biblical Aramaic), † (every
+                 occurrence cited), brackets (the form itself doesn't
+                 occur), other spellings, and the count printed under it. -->
             <h2
               bind:this={heading}
               tabindex="-1"
-              class="m-0 text-4xl leading-tight font-normal outline-none"
+              class="m-0 text-end text-4xl leading-tight font-normal outline-none"
             >
-              {@render word(entry.headword, entry.headwordLang)}
+              {#if line?.peculiar}<span
+                  class="lexicon-mark"
+                  title={$_('lexicon.peculiar')}>‡</span
+                >{/if}{#if entry.allCited}<span
+                  class="lexicon-mark"
+                  title={$_('lexicon.all-cited')}>†</span
+                >{/if}<span
+                title={line?.brackets ? $_('lexicon.brackets') : undefined}
+                >{line?.brackets ? '[' : ''}{@render word(
+                  entry.headword,
+                  entry.headwordLang
+                )}{line?.brackets === 'first'
+                  ? ']'
+                  : ''}{#each line?.variants ?? [] as variant, v (v)}<span
+                    class="text-2xl"
+                    >{SPELLING_SEPARATOR}{@render word(
+                      textOf(variant.children),
+                      variant.lang as string
+                    )}{#if variant.count}<sub
+                        class="lexicon-count"
+                        title={$_('lexicon.count')}>{variant.count}</sub
+                      >{/if}</span
+                  >{/each}{line?.brackets === 'all' ? ']' : ''}</span
+              >{#if line?.count}<sub
+                  class="lexicon-count"
+                  title={$_('lexicon.count')}>{line.count}</sub
+                >{/if}
             </h2>
           </header>
 
-          {#each parts(entry) as part, index (index)}
-            <!-- Liddell and Scott's senses are numbered, a deeper level
-                 indented; their entries need no section headings. -->
+          {#each entryBlocks(entry) as block, index (index)}
+            {@const part = block.part}
+            <!-- Numbered senses (Liddell and Scott, BDB), deeper levels
+                 indented; their entries need no section headings. A BDB
+                 sense shows the words before its number, its dagger,
+                 number, stem and count, then its text. -->
             <section
               class="flex flex-col gap-1"
-              class:ps-5={part.style === 'sense' && part.level === '3'}
-              class:ps-10={part.style === 'sense' && Number(part.level) >= 4}
+              style:padding-inline-start={block.indent
+                ? `${block.indent * 1.25}rem`
+                : undefined}
             >
               {#if SECTIONS[part.style] && !hasSenses(entry)}
                 <h3
@@ -258,9 +320,21 @@
                 </h3>
               {/if}
               <p class="m-0 leading-relaxed">
-                {#if part.style === 'sense' && part.n}<strong class="me-1.5"
-                    >{part.n}.</strong
-                  >{/if}<LexiconInline items={part.children} onOpen={open} />
+                {#if part.pre}{`${part.pre} `}{/if}{#if part.allCited}<span
+                    class="lexicon-mark me-0.5"
+                    title={$_('lexicon.all-cited')}>†</span
+                  >{/if}{#if part.n}<strong class="me-1.5">{part.n}.</strong
+                  >{/if}{#if part.stem}<strong class="me-1.5"
+                    >{part.stem}</strong
+                  >{/if}{#if part.count}<sub
+                    class="lexicon-count me-1.5"
+                    title={$_('lexicon.count')}>{part.count}</sub
+                  >{/if}<LexiconInline
+                  items={block.text}
+                  onOpen={open}
+                  onVerse={goToVerse}
+                  {describeRef}
+                />
               </p>
             </section>
           {/each}
@@ -276,3 +350,18 @@
     {/if}
   </div>
 </div>
+
+<style>
+  .lexicon-mark {
+    color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
+    margin-inline-end: 0.15em;
+  }
+  .lexicon-count {
+    margin-inline-start: 0.15em;
+    font-size: 0.45em;
+    color: color-mix(in oklab, var(--color-base-content) 60%, transparent);
+  }
+  p .lexicon-count {
+    font-size: 0.75em;
+  }
+</style>

@@ -93,6 +93,95 @@ export function hasSenses(entry: LexiconEntry): boolean {
   );
 }
 
+/** BDB's headword line (`hwline`): its marks and other spellings. */
+export interface HeadwordLine {
+  /** ‡: a word found only in Biblical Aramaic. */
+  peculiar: boolean;
+  /** Square brackets: around the headword, or the whole headword line. */
+  brackets?: 'first' | 'all';
+  /** The occurrence count BDB prints under the headword. */
+  count?: string;
+  /** Other spellings, each a `word` element with its own `count`. */
+  variants: LexiconElement[];
+}
+
+export function headwordLine(entry: LexiconEntry): HeadwordLine | undefined {
+  const line = entry.body.find(
+    (item): item is LexiconElement =>
+      typeof item !== 'string' && item.style === 'hwline'
+  );
+  if (!line) return undefined;
+  const brackets = line.brackets as string | undefined;
+  return {
+    peculiar: line.peculiar === '1',
+    brackets: brackets === 'first' || brackets === 'all' ? brackets : undefined,
+    count: line.count as string | undefined,
+    variants: line.children.filter(
+      (item): item is LexiconElement => typeof item !== 'string'
+    ),
+  };
+}
+
+/**
+ * A part of an entry as shown: its own labels (a sense's number, stem,
+ * dagger, the words before its number, its count; a note's number) and its
+ * text, indented by depth.
+ */
+export interface EntryBlock {
+  part: LexiconElement;
+  /** The text shown after the labels. */
+  text: LexiconItem[];
+  /** 0 for the outermost senses, up to 3. */
+  indent: number;
+}
+
+/** A sense or note's labels, which its text follows. */
+const LABELS = ['n', 'stem', 'allCited', 'pre', 'count'];
+
+function hasLabel(part: LexiconElement): boolean {
+  return LABELS.some((name) => part[name] !== undefined);
+}
+
+/**
+ * The parts of an entry as shown, the headword line left out (it is drawn
+ * with the headword). BDB writes a number or a stem as a sense of its own
+ * with no text ("1.", "Qal"), followed by its text one level deeper; the
+ * two are shown together, as BDB prints them ("1. lit. night", "Qal Pf.
+ * ..."). Depth is measured from the entry's outermost senses, so Liddell
+ * and Scott (whose senses start at level 2) and BDB (level 1) indent alike.
+ */
+export function entryBlocks(entry: LexiconEntry): EntryBlock[] {
+  const parts = entry.body.filter(
+    (item): item is LexiconElement =>
+      typeof item !== 'string' && item.style !== 'hwline'
+  );
+  const levels = parts
+    .map((part) => Number(part.level))
+    .filter((level) => Number.isFinite(level) && level > 0);
+  const base = levels.length > 0 ? Math.min(...levels) : 0;
+  const blocks: EntryBlock[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    const next = parts[i + 1];
+    let text = part.children;
+    if (
+      (part.style === 'sense' || part.style === 'note') &&
+      part.children.length === 0 &&
+      hasLabel(part) &&
+      next?.style === 'sense' &&
+      !hasLabel(next) &&
+      next.children.length > 0
+    ) {
+      text = next.children;
+      i++;
+    }
+    const level = Number(part.level);
+    const indent = Number.isFinite(level) && level > 0 ? level - base : 0;
+    blocks.push({ part, text, indent: Math.max(0, Math.min(3, indent)) });
+  }
+  return blocks;
+}
+
 /** A key that is a Strong's number (shown); other keys are internal ids. */
 export function isStrongKey(key: string): boolean {
   return /^[HG][1-9]\d*[a-z]?$/.test(key);

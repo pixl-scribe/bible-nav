@@ -228,6 +228,19 @@ export default class BibleTextService {
     this.openAt(sid);
   }
 
+  /**
+   * Goes to verse `sid` from a scripture reference in a lexicon (decided
+   * 2026-11-22): the picker's route, since the reader has left whatever the
+   * search held (the box is emptied, and the place left and the place
+   * reached go into Recent, the way back), with the verse highlighted as a
+   * Notes heading does. The highlight is set once emptying the box has run
+   * its effect, which clears any highlight.
+   */
+  public goToReference(sid: string): void {
+    this.goTo(sid);
+    tick().then(() => (this.highlightSid = sid));
+  }
+
   /** Goes to verse 1 of the previous (-1) or next (1) chapter, at the top. */
   public stepChapter(step: 1 | -1): void {
     const target = this.chapterStep(step);

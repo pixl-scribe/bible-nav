@@ -156,7 +156,7 @@
     <!-- Shown above, kept loaded so each keeps its place. -->
   {:else if pane.active?.kind === 'lexicon'}
     {#key pane.active.key}
-      <LexiconPanel tab={pane.active} {pane} {textMaxWidth} />
+      <LexiconPanel tab={pane.active} {pane} {textMaxWidth} {service} />
     {/key}
   {:else if pane.active?.kind === 'notes' && service}
     <NotesPanel
