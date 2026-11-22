@@ -131,6 +131,11 @@ export default class BibleTextService {
    * search is cleared.
    */
   public browseSid = $state<string>(startSid);
+  /**
+   * The hit the reader last jumped to in the results (picker or arrows),
+   * where clearing the search shows the text (decided 2026-11-22).
+   */
+  private jumpedSid: string | undefined;
   /** A verse the pane should bring to its top. */
   public scrollTarget = $state<ScrollTarget | undefined>();
   /** The verse highlighted with its note in a Notes tab. */
@@ -330,6 +335,7 @@ export default class BibleTextService {
    */
   public async showList(source: ListSource, at?: string): Promise<void> {
     const seq = ++this.loadSeq;
+    this.jumpedSid = undefined;
     this.mode = 'list';
     this.listSource = source;
     this.listSids = [];
@@ -356,11 +362,13 @@ export default class BibleTextService {
     if (this.mode !== 'list') return;
     this.lead();
     if (this.listVerses.some((verse) => verse.sid === sid)) {
+      this.jumpedSid = sid;
       this.scrollTarget = { sid };
       return;
     }
     const index = this.listSids.indexOf(sid);
     if (index < 0) return;
+    this.jumpedSid = sid;
     const seq = ++this.loadSeq;
     this.loading = true;
     try {
@@ -505,6 +513,25 @@ export default class BibleTextService {
     }
   }
 
+  /**
+   * The search is cleared (decided 2026-11-22): if the reader jumped to a
+   * hit in the results (picker or arrows), the text shows that verse in its
+   * chapter, and the place read before the search goes into Recent, the
+   * way back; otherwise, after only scrolling through the results, the text
+   * returns to where the reader was before searching.
+   */
+  private leaveSearch(): void {
+    const jumped = this.jumpedSid;
+    this.jumpedSid = undefined;
+    if (!jumped) {
+      this.openAt(this.browseSid);
+      return;
+    }
+    recentPlaces.add(this.browseSid);
+    recentPlaces.add(jumped);
+    this.openAt(jumped);
+  }
+
   /** The reader is moving this text: it leads, and its partner follows. */
   public lead(): void {
     this.leadAt = performance.now();
@@ -641,8 +668,14 @@ export default class BibleTextService {
       this.performSearch();
       return;
     }
-    this.autoCompleteOptions = [];
     this.highlightSid = undefined;
+    this.suggest(searchInput);
+    this.searchDebounced();
+  }
+
+  /** The suggestions for what's typed: books, then words. */
+  private suggest(searchInput: string): void {
+    this.autoCompleteOptions = [];
     const [_before, after] = splitByLastDelimiter(
       searchInput.toLowerCase(),
       searchDelimiters
@@ -654,7 +687,21 @@ export default class BibleTextService {
       }
       this.addWordAutoCompleteOptions(searchInput, after);
     }
-    this.searchDebounced();
+  }
+
+  /** Whether the suggestions list is showing. */
+  public get autoCompleteOpen(): boolean {
+    return this.autoCompleteOptions.length > 0;
+  }
+
+  /** Closes the suggestions, keeping the search and its results. */
+  public closeAutoComplete(): void {
+    this.autoCompleteOptions = [];
+  }
+
+  /** Shows the suggestions for what's typed again, without searching. */
+  public openAutoComplete(): void {
+    this.suggest(this.searchInput);
   }
 
   /**
@@ -695,7 +742,7 @@ export default class BibleTextService {
     this.lead();
     const search = this.searchInput.toLowerCase().trim();
     if (search.length < 2) {
-      if (this.mode !== 'chapters') this.openAt(this.browseSid);
+      if (this.mode !== 'chapters') this.leaveSearch();
       return;
     }
     const request = parseSearch(search);

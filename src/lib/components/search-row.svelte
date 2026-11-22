@@ -62,15 +62,31 @@
     },
   });
 
+  /**
+   * Escape first closes the suggestions, keeping the search (the combobox
+   * pattern); with none showing, the search box clears itself, as a search
+   * field does. Down brings closed suggestions back.
+   */
   function handleSearchKeydown(event: KeyboardEvent) {
     switch (event.key) {
+      case 'Escape':
+        if (bibleTextService?.autoCompleteOpen) {
+          // Kept from the search field, which would clear itself.
+          event.preventDefault();
+          bibleTextService.closeAutoComplete();
+        }
+        break;
       case 'ArrowUp':
         event.preventDefault();
         bibleTextService?.autoCompleteUp();
         break;
       case 'ArrowDown':
         event.preventDefault();
-        bibleTextService?.autoCompleteDown();
+        if (bibleTextService && !bibleTextService.autoCompleteOpen) {
+          bibleTextService.openAutoComplete();
+        } else {
+          bibleTextService?.autoCompleteDown();
+        }
         break;
       case 'Enter':
         event.preventDefault();
@@ -79,11 +95,24 @@
     }
   }
 
+  /** A click outside the search bar closes the suggestions. */
+  function onWindowPointerDown(event: PointerEvent) {
+    if (
+      bibleTextService?.autoCompleteOpen &&
+      searchBar &&
+      !searchBar.contains(event.target as Node)
+    ) {
+      bibleTextService.closeAutoComplete();
+    }
+  }
+
   function onClickAutoComplete(option: AutoCompleteOption) {
     bibleTextService?.autoCompletePick(option);
     inputRef?.focus();
   }
 </script>
+
+<svelte:window onpointerdown={onWindowPointerDown} />
 
 {#if showSearch}
   <div class="flex w-full p-2 relative" bind:this={searchBar}>
