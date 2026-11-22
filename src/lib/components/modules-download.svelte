@@ -92,14 +92,18 @@
         {@const progress = moduleCatalogService.downloads[offerKey(offer)]}
         {@const failure = moduleCatalogService.failures[offerKey(offer)]}
         <li class="bg-base-200 rounded-box p-4 flex flex-col gap-3">
-          <div class="flex flex-wrap items-center justify-between gap-4">
-            <div class="flex flex-col gap-1 min-w-0">
-              <div class="flex flex-wrap items-center gap-2">
-                <h3 class="text-base font-bold">{offer.name}</h3>
-                <span class="text-sm text-base-content/70"
+          <!-- The name may wrap onto more lines; what's on the right keeps
+               its size beside it, never dropping below. -->
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex flex-col gap-1 min-w-0 flex-1">
+              <!-- The version follows the name's last word, wherever the
+                   name wraps. -->
+              <h3 class="text-base font-bold">
+                {offer.name}<span
+                  class="ms-2 whitespace-nowrap text-sm font-normal text-base-content/70"
                   >v{offer.version}</span
                 >
-              </div>
+              </h3>
               <p class="text-sm text-base-content/70">
                 {[
                   offer.language,
@@ -111,35 +115,37 @@
               </p>
             </div>
 
-            {#if progress}
-              <DownloadStatus {progress} />
-            {:else if offer.relation === 'installed'}
-              <span class="flex items-center gap-1 text-sm text-success">
-                <Check size={16} aria-hidden="true" />
-                {$_('modules.download.installed')}
-              </span>
-            {:else if offer.relation === 'older'}
-              <span class="text-sm text-base-content/70">
-                {$_('modules.download.newer-installed')}
-              </span>
-            {:else if offer.needsNewerApp}
-              <span
-                class="flex items-center gap-1 text-sm text-base-content/70"
-              >
-                <Info size={16} aria-hidden="true" />
-                {$_('modules.download.needs-newer-app')}
-              </span>
-            {:else}
-              <button
-                class="btn btn-sm btn-primary"
-                onclick={() => moduleCatalogService.download(offer)}
-              >
-                <Download size={16} aria-hidden="true" />
-                {offer.relation === 'update'
-                  ? $_('modules.update')
-                  : $_('modules.download.download')}
-              </button>
-            {/if}
+            <div class="shrink-0">
+              {#if progress}
+                <DownloadStatus {progress} />
+              {:else if offer.relation === 'installed'}
+                <span class="flex items-center gap-1 text-sm text-success">
+                  <Check size={16} aria-hidden="true" />
+                  {$_('modules.download.installed')}
+                </span>
+              {:else if offer.relation === 'older'}
+                <span class="text-sm text-base-content/70">
+                  {$_('modules.download.newer-installed')}
+                </span>
+              {:else if offer.needsNewerApp}
+                <span
+                  class="flex items-center gap-1 text-sm text-base-content/70"
+                >
+                  <Info size={16} aria-hidden="true" />
+                  {$_('modules.download.needs-newer-app')}
+                </span>
+              {:else}
+                <button
+                  class="btn btn-sm btn-primary"
+                  onclick={() => moduleCatalogService.download(offer)}
+                >
+                  <Download size={16} aria-hidden="true" />
+                  {offer.relation === 'update'
+                    ? $_('modules.update')
+                    : $_('modules.download.download')}
+                </button>
+              {/if}
+            </div>
           </div>
 
           {#if progress}
